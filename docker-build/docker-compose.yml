@@ -1,0 +1,22 @@
+services:
+  fep-builder:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fep-builder
+    environment:
+      - REPO_PATH=${REPO_PATH:-/workspace/repo}
+      - BRANCH=${BRANCH:-FEP_1-2_SIT}
+      - BUILD_MODE=${BUILD_MODE:-}
+      - BUILD_MODULES=${BUILD_MODULES:-}
+      - GIT_PULL=${GIT_PULL:-false}
+      - GIT_RESET=${GIT_RESET:-false}
+      - CONTAINER_OUTPUT_PATH=${CONTAINER_OUTPUT_PATH:-/build/output}
+      - HOST_OUTPUT_PATH=${HOST_OUTPUT_PATH}
+    volumes:
+      # 原始碼 Git Repo（host 端由 FEP_REPO_PATH 設定，container 端由 REPO_PATH 設定）
+      - ${FEP_REPO_PATH}:${REPO_PATH:-/workspace/repo}
+      # 建置產出物輸出路徑（host 端由 HOST_OUTPUT_PATH 設定，container 端由 CONTAINER_OUTPUT_PATH 設定）
+      - ${HOST_OUTPUT_PATH}:${CONTAINER_OUTPUT_PATH:-/build/output}
+      # 重用 Host 的 Maven 快取，避免重新下載耗費手機流量（由 .env M2_PATH 設定）
+      - ${M2_PATH}:/root/.m2
