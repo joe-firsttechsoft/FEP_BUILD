@@ -33,6 +33,23 @@ def parse_raw_input(input_str):
         print(f"❌ 格式錯誤：雙引號數量為奇數（共 {quote_count} 個），請檢查 txt 內容")
         return []
 
+    # 前置處理：移除 {} 內的 "（避免 regex 把區塊切斷）
+    cleaned = []
+    brace_depth = 0
+    for c in input_str:
+        if c == '{':
+            brace_depth += 1
+            cleaned.append(c)
+        elif c == '}':
+            if brace_depth > 0:
+                brace_depth -= 1
+            cleaned.append(c)
+        elif c == '"' and brace_depth > 0:
+            pass  # {} 內的 " 直接略過
+        else:
+            cleaned.append(c)
+    input_str = ''.join(cleaned)
+
     # 找出所有雙引號包住的區塊
     blocks = re.findall(r'"(.*?)"', input_str, re.DOTALL)
     result = []

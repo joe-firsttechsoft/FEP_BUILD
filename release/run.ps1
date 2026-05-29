@@ -348,17 +348,23 @@ if ($TarFiles -and $TarFiles.Count -gt 0) {
     foreach ($tar in $toExtract) {
         Write-Host ""
         Write-Host " 解壓縮：$($tar.Name)"
+
+        # 記錄解壓前 fep-app 已有的目錄（避免重複移出）
+        $FepAppDir = Join-Path $OutputPath "fep-app"
+        $existingDirs = @()
+        if (Test-Path $FepAppDir) {
+            $existingDirs = (Get-ChildItem $FepAppDir -Directory).Name
+        }
+
         tar -xzf $tar.FullName -C $OutputPath
 
-        $FepAppDir = Join-Path $OutputPath "fep-app"
         if (Test-Path $FepAppDir) {
-            $innerDir = Get-ChildItem $FepAppDir -Directory | Select-Object -First 1
-            if ($innerDir) {
-                $dest = Join-Path $OutputPath $innerDir.Name
+            Get-ChildItem $FepAppDir -Directory | Where-Object { $_.Name -notin $existingDirs } | ForEach-Object {
+                $dest = Join-Path $OutputPath $_.Name
                 if (Test-Path $dest) { Remove-Item $dest -Recurse -Force -ErrorAction SilentlyContinue }
-                Copy-Item -Path $innerDir.FullName -Destination $dest -Recurse -Force
-                Remove-Item $innerDir.FullName -Recurse -Force -ErrorAction SilentlyContinue
-                Write-Host " ✅ 移出：$($innerDir.Name)"
+                Copy-Item -Path $_.FullName -Destination $dest -Recurse -Force
+                Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
+                Write-Host " ✅ 移出：$($_.Name)"
             }
             Remove-Item $FepAppDir -Recurse -Force -ErrorAction SilentlyContinue
         }

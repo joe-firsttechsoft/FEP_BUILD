@@ -5,6 +5,30 @@ import os
 import sys
 import re
 
+def remove_quotes_in_braces(content):
+    """
+    掃描全文，移除 {...} 內的雙引號。
+    {} 內的 " 會讓 regex 切割區塊斷裂，需在解析前先移除。
+    回傳 (fixed_content, removed_count)
+    """
+    result = []
+    brace_depth = 0
+    removed = 0
+    for c in content:
+        if c == '{':
+            brace_depth += 1
+            result.append(c)
+        elif c == '}':
+            if brace_depth > 0:
+                brace_depth -= 1
+            result.append(c)
+        elif c == '"' and brace_depth > 0:
+            removed += 1  # {} 內的 " 直接略過
+        else:
+            result.append(c)
+    return ''.join(result), removed
+
+
 def validate_and_fix_script(content):
     """
     驗證並自動修正更新版號 script 格式。
@@ -16,6 +40,11 @@ def validate_and_fix_script(content):
     warnings = []
     errors   = []
 
+    # 前置處理：移除 {} 內的 "（避免 regex 把區塊切斷）
+    content, removed_count = remove_quotes_in_braces(content)
+    if removed_count > 0:
+        warnings.append(f'內容中偵測到 {removed_count} 個在 {{}} 內的雙引號，已自動移除')
+
     # 無法自動修正：雙引號數量為奇數
     quote_count = content.count('"')
     if quote_count == 0:
@@ -25,30 +54,15 @@ def validate_and_fix_script(content):
         errors.append(f'雙引號數量為奇數（共 {quote_count} 個），可能有未配對的引號')
         return content, warnings, errors
 
-    # 逐區塊檢查，用 re.sub 搭配函式做原位修正
-    block_index = [0]  # 用 list 讓 closure 可以修改
+    # 逐區塊檢查
+    block_index = [0]
 
     def fix_block(match):
         i = block_index[0] = block_index[0] + 1
         block = match.group(1)
 
-        # 無法自動修正：缺少 {}
         if '{' not in block or '}' not in block:
             errors.append(f'第 {i} 個區塊缺少 {{}}，無法解析：{block[:60]}')
-            return match.group(0)
-
-        brace_start   = block.index('{')
-        brace_end     = block.rindex('}')
-        brace_content = block[brace_start + 1:brace_end]
-
-        # 自動修正：移除 {} 內的 "
-        if '"' in brace_content:
-            fixed_content = brace_content.replace('"', '')
-            warnings.append(f'第 {i} 個區塊 {{}} 內含有雙引號，已自動移除\n'
-                            f'  原始：{brace_content[:80]}\n'
-                            f'  修正：{fixed_content[:80]}')
-            fixed_block = block[:brace_start + 1] + fixed_content + block[brace_end:]
-            return f'"{fixed_block}"'
 
         return match.group(0)
 
