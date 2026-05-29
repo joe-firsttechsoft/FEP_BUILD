@@ -147,13 +147,13 @@ fi
 
 # fep-batch-task JAR 收集（部分建置且模組含 fep-batch-task 時）
 if [ -n "$BUILD_MODULES" ] && echo "$BUILD_MODULES" | grep -qE "(^|,)\s*fep-batch-task(\s*,|$)"; then
-    BATCH_TASK_TARGET="$REPO_PATH/source/fep/fep-batch-task/target"
-    if [ -d "$BATCH_TASK_TARGET" ]; then
+    BATCH_TASK_ASSEMBLY="$REPO_PATH/source/fep-assembly-batch-task"
+    if [ -d "$BATCH_TASK_ASSEMBLY" ]; then
         echo "[Output] 收集 fep-batch-task JAR..."
-        find "$BATCH_TASK_TARGET" -maxdepth 1 -name "fep-batch-task*.jar" \
+        find "$BATCH_TASK_ASSEMBLY" -maxdepth 1 -name "fep-batch-task*.jar" \
             -exec cp -v {} "$CONTAINER_OUTPUT_PATH/" \;
     else
-        echo "警告：找不到 $BATCH_TASK_TARGET"
+        echo "警告：找不到 $BATCH_TASK_ASSEMBLY"
     fi
 fi
 
