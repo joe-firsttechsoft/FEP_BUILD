@@ -145,6 +145,18 @@ if [ "$COLLECT_JAR" = "true" ]; then
     fi
 fi
 
+# fep-batch-task JAR 收集（部分建置且模組含 fep-batch-task 時）
+if [ -n "$BUILD_MODULES" ] && echo "$BUILD_MODULES" | grep -qE "(^|,)\s*fep-batch-task(\s*,|$)"; then
+    BATCH_TASK_TARGET="$REPO_PATH/source/fep/fep-batch-task/target"
+    if [ -d "$BATCH_TASK_TARGET" ]; then
+        echo "[Output] 收集 fep-batch-task JAR..."
+        find "$BATCH_TASK_TARGET" -maxdepth 1 -name "fep-batch-task*.jar" \
+            -exec cp -v {} "$CONTAINER_OUTPUT_PATH/" \;
+    else
+        echo "警告：找不到 $BATCH_TASK_TARGET"
+    fi
+fi
+
 if [ "$COLLECT_WAR" = "true" ]; then
     WAR_FILE="$REPO_PATH/source/fep-war/fep-web.war"
     if [ -f "$WAR_FILE" ]; then
