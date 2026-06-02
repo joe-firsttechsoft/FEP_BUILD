@@ -277,9 +277,10 @@ if ($skipBuild) {
         exit 0
     }
 
+    $txtSource = if ($step3Choice -ieq "S") { "⚠️  使用既有 txt（非本次下載）" } else { "本次下載" }
     Write-Host " [A] 全 build（手動選擇 BUILD_MODE）"
     if ($AutoModules.Count -gt 0) {
-        Write-Host " [B] 依 release note 部分 build"
+        Write-Host " [B] 依 release note 部分 build  【來源：$txtSource】"
         Write-Host "     偵測到的 Maven 模組：$($AutoModules -join ', ')"
     } else {
         Write-Host " [B] 依 release note 部分 build  ⚠️  未偵測到可對應模組，無法選擇"
@@ -314,9 +315,26 @@ Write-Host "------------------------------------------------"
 Write-Host " 📦 [8/8] 搬移並解壓"
 Write-Host "------------------------------------------------"
 
-$BinTarFiles = Get-ChildItem $OutputPath -Filter "*bin*.tar.gz" -ErrorAction SilentlyContinue | Sort-Object Name
+$AllBinTarFiles = Get-ChildItem $OutputPath -Filter "*bin*.tar.gz" -ErrorAction SilentlyContinue | Sort-Object Name
+
+# 若有偵測到 release note 模組，依模組名稱前綴篩選
+if ($AutoModules.Count -gt 0) {
+    $BinTarFiles = $AllBinTarFiles | Where-Object {
+        $name = $_.Name
+        $AutoModules | Where-Object { $name -like "$_*" }
+    }
+    $txtSource = if ($step3Choice -ieq "S") { "⚠️  既有 txt" } else { "本次下載" }
+    if ($BinTarFiles.Count -lt $AllBinTarFiles.Count) {
+        Write-Host " 依 release note 篩選後的 bin 套件【來源：$txtSource】（共 $($AllBinTarFiles.Count) 個，篩選後 $($BinTarFiles.Count) 個）："
+    } else {
+        Write-Host " bin 套件【來源：$txtSource】："
+    }
+} else {
+    $BinTarFiles = $AllBinTarFiles
+    Write-Host " bin 套件（未偵測到 release note 模組，顯示全部）："
+}
+
 if ($BinTarFiles -and $BinTarFiles.Count -gt 0) {
-    Write-Host " bin 套件："
     $BinTarFiles | ForEach-Object { Write-Host "   $($_.Name)" }
     Write-Host ""
     $extractChoice = Read-Host " 是否將 bin 套件解壓到 bin 子目錄？[Y/N]（預設 Y）"
