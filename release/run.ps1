@@ -314,74 +314,60 @@ Write-Host "------------------------------------------------"
 Write-Host " 📦 [8/8] 搬移並解壓"
 Write-Host "------------------------------------------------"
 
-$TarFiles = Get-ChildItem $OutputPath -Filter "*.tar.gz" -ErrorAction SilentlyContinue | Sort-Object Name
-if ($TarFiles -and $TarFiles.Count -gt 0) {
-    Write-Host " 可解壓縮的 tar.gz 檔案："
-    for ($idx = 0; $idx -lt $TarFiles.Count; $idx++) {
-        Write-Host "  [$($idx + 1)] $($TarFiles[$idx].Name)"
-    }
-    Write-Host "  [A] 全部解壓縮"
-    Write-Host "  [N] 略過解壓縮"
+$BinTarFiles = Get-ChildItem $OutputPath -Filter "*bin*.tar.gz" -ErrorAction SilentlyContinue | Sort-Object Name
+if ($BinTarFiles -and $BinTarFiles.Count -gt 0) {
+    Write-Host " bin 套件："
+    $BinTarFiles | ForEach-Object { Write-Host "   $($_.Name)" }
     Write-Host ""
-    $selection = Read-Host " 請輸入編號（逗號分隔，如 1,3），或輸入 A / N（預設 A）"
+    $extractChoice = Read-Host " 是否將 bin 套件解壓到 bin 子目錄？[Y/N]（預設 Y）"
 
-    $toExtract = @()
-    if ($selection -ieq "N") {
-        Write-Host " ⏭️  略過解壓縮"
-    } elseif ($selection -match '^\s*$' -or $selection -ieq "A") {
-        $toExtract = $TarFiles
+    if ($extractChoice -ine "N") {
+        $BinOutputPath = Join-Path $OutputPath "bin"
+        if (Test-Path $BinOutputPath) { Remove-Item $BinOutputPath -Recurse -Force -ErrorAction SilentlyContinue }
+        New-Item -ItemType Directory -Path $BinOutputPath | Out-Null
+
+        foreach ($tar in $BinTarFiles) {
+            Write-Host ""
+            Write-Host " 解壓縮：$($tar.Name)"
+
+            $FepAppDir = Join-Path $BinOutputPath "fep-app"
+            $existingDirs = @()
+            if (Test-Path $FepAppDir) {
+                $existingDirs = (Get-ChildItem $FepAppDir -Directory).Name
+            }
+
+            tar -xzf $tar.FullName -C $BinOutputPath
+
+            if (Test-Path $FepAppDir) {
+                Get-ChildItem $FepAppDir -Directory | Where-Object { $_.Name -notin $existingDirs } | ForEach-Object {
+                    $dest = Join-Path $BinOutputPath $_.Name
+                    if (Test-Path $dest) { Remove-Item $dest -Recurse -Force -ErrorAction SilentlyContinue }
+                    Copy-Item -Path $_.FullName -Destination $dest -Recurse -Force
+                    Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
+                    Write-Host " ✅ 移出：$($_.Name)"
+                }
+                Remove-Item $FepAppDir -Recurse -Force -ErrorAction SilentlyContinue
+            }
+        }
     } else {
-        foreach ($token in ($selection -split ',')) {
-            $n = $token.Trim()
-            if ($n -match '^\d+$') {
-                $i = [int]$n - 1
-                if ($i -ge 0 -and $i -lt $TarFiles.Count) { $toExtract += $TarFiles[$i] }
-            }
-        }
-    }
-
-    # 清理上次解壓縮留下的目錄
-    Get-ChildItem $OutputPath | Where-Object {
-        $_.PSIsContainer -and $_.Name -ne "fep-app"
-    } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-
-    foreach ($tar in $toExtract) {
-        Write-Host ""
-        Write-Host " 解壓縮：$($tar.Name)"
-
-        # 記錄解壓前 fep-app 已有的目錄（避免重複移出）
-        $FepAppDir = Join-Path $OutputPath "fep-app"
-        $existingDirs = @()
-        if (Test-Path $FepAppDir) {
-            $existingDirs = (Get-ChildItem $FepAppDir -Directory).Name
-        }
-
-        tar -xzf $tar.FullName -C $OutputPath
-
-        if (Test-Path $FepAppDir) {
-            Get-ChildItem $FepAppDir -Directory | Where-Object { $_.Name -notin $existingDirs } | ForEach-Object {
-                $dest = Join-Path $OutputPath $_.Name
-                if (Test-Path $dest) { Remove-Item $dest -Recurse -Force -ErrorAction SilentlyContinue }
-                Copy-Item -Path $_.FullName -Destination $dest -Recurse -Force
-                Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
-                Write-Host " ✅ 移出：$($_.Name)"
-            }
-            Remove-Item $FepAppDir -Recurse -Force -ErrorAction SilentlyContinue
-        }
+        Write-Host " ⏭️  略過解壓縮"
     }
 } else {
-    Write-Host " ⚠️  未找到 .tar.gz 檔案（WAR only 或部分 build），略過解壓縮"
+    Write-Host " ⚠️  未找到 bin tar.gz 檔案，略過解壓縮"
 }
+
+$BinOutputPath = Join-Path $OutputPath "bin"
+$OpenPath = if (Test-Path $BinOutputPath) { $BinOutputPath } else { $OutputPath }
 
 Write-Host ""
 Write-Host " 📂 產出物列表："
-Get-ChildItem $OutputPath | ForEach-Object { Write-Host "   $($_.Name)" }
+Get-ChildItem $OpenPath | ForEach-Object { Write-Host "   $($_.Name)" }
 
-Invoke-Item $OutputPath
+Invoke-Item $OpenPath
 Write-Host ""
 Write-Host "------------------------------------------------"
 Write-Host " ⚠️  請確認產出物是否正確"
-Write-Host " 📁 輸出路徑：$OutputPath"
+Write-Host " 📁 輸出路徑：$OpenPath"
 Write-Host "------------------------------------------------"
 Read-Host " 確認無誤後按 Enter 繼續，或按 Ctrl+C 中止"
 
