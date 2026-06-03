@@ -11,6 +11,8 @@ GIT_RESET="${GIT_RESET:-false}"
 CONTAINER_OUTPUT_PATH="${CONTAINER_OUTPUT_PATH:-/build/output}" # container 內掛載路徑，從 .env 傳入
 HOST_OUTPUT_PATH="${HOST_OUTPUT_PATH}"                          # host 端路徑，從 .env 傳入，僅用於最終顯示
 
+export COPYFILE_DISABLE=1  # 避免 macOS 在 exFAT 上建立 ._ resource fork 檔案
+
 # 預設收集旗標
 COLLECT_JAR=true
 COLLECT_WAR=false
@@ -87,10 +89,10 @@ case "$BUILD_MODE" in
         COLLECT_JAR=false
         ;;
     +web)
-        # 建置 fep-web + 完整專案
+        # 建置完整專案，再補 WAR（先全 build 再 install WAR，避免 clean 刪除 WAR）
         cd "$REPO_PATH/source/fep"
-        mvn clean install -pl fep-web -Pwar -am $ASSEMBLY_PROPS -f pom.xml
         mvn clean install $ASSEMBLY_PROPS -f pom.xml
+        mvn install -pl fep-web -Pwar -am $ASSEMBLY_PROPS -f pom.xml
         COLLECT_WAR=true
         ;;
     -safeaa)
@@ -111,6 +113,19 @@ case "$BUILD_MODE" in
         ;;
 esac
 fi  # end BUILD_MODULES / BUILD_MODE
+
+# --- Batch-task JAR 收集（保底：從 fep-assembly-batch-task 明確複製）---
+if [ "$COLLECT_JAR" = "true" ]; then
+    BATCH_TASK_DIR="$REPO_PATH/source/fep-assembly-batch-task"
+    if [ -d "$BATCH_TASK_DIR" ]; then
+        JAR_COUNT=$(find "$BATCH_TASK_DIR" -maxdepth 1 -name "fep-batch-task*.jar" | wc -l)
+        if [ "$JAR_COUNT" -gt 0 ]; then
+            echo "[Output] 收集 fep-batch-task JAR（$JAR_COUNT 個）..."
+            find "$BATCH_TASK_DIR" -maxdepth 1 -name "fep-batch-task*.jar" \
+                -exec cp -v {} "$CONTAINER_OUTPUT_PATH/" \;
+        fi
+    fi
+fi
 
 # --- WAR 收集 ---
 if [ "$COLLECT_WAR" = "true" ]; then
