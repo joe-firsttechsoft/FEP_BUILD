@@ -28,6 +28,9 @@ $Python = if ($IsWindows) {
 $env:RELEASE_NOTE_INPUT = Join-Path $ScriptDir "ReleaseNoteUpdateData.txt"
 $env:RELEASE_NOTE_PATH  = Join-Path $RepoPath "source" "fep-release-note"
 
+# 避免 macOS 在 exFAT 外接碟上建立 ._ resource fork 檔案（Windows/Linux 忽略此變數）
+$env:COPYFILE_DISABLE = "1"
+
 $GitBranch = switch ($BranchType) {
     "SIT" { "FEP_1-2_SIT" }
     "UAT" { "FEP_1-2_UAT" }
@@ -231,6 +234,7 @@ function Select-BuildMode {
 # [6/8] build folder 清空（可 skip，skip 則自動 skip [7] docker build）
 # =============================================
 $skipBuild = $false
+$AutoModules = @()  # 初始化，避免 skip [7] 時 step 8 引用未定義變數
 Write-Host ""
 Write-Host "------------------------------------------------"
 Write-Host " 輸出路徑：$OutputPath"
@@ -246,7 +250,7 @@ if ($step6Choice -ieq "S") {
 } else {
     if (Test-Path $OutputPath) {
         Write-Host " 清空輸出資料夾：$OutputPath"
-        Get-ChildItem $OutputPath | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+        Get-ChildItem $OutputPath -Force | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
 
@@ -341,32 +345,23 @@ if ($BinTarFiles -and $BinTarFiles.Count -gt 0) {
 
     if ($extractChoice -ine "N") {
         $BinOutputPath = Join-Path $OutputPath "bin"
-        if (Test-Path $BinOutputPath) { Remove-Item $BinOutputPath -Recurse -Force -ErrorAction SilentlyContinue }
+        if (Test-Path $BinOutputPath) {
+            Get-ChildItem $BinOutputPath -Force -Recurse |
+                Sort-Object FullName -Descending |
+                Remove-Item -Force -ErrorAction SilentlyContinue
+            Remove-Item $BinOutputPath -Force -ErrorAction SilentlyContinue
+        }
         New-Item -ItemType Directory -Path $BinOutputPath | Out-Null
 
         foreach ($tar in $BinTarFiles) {
-            Write-Host ""
             Write-Host " 解壓縮：$($tar.Name)"
-
-            $FepAppDir = Join-Path $BinOutputPath "fep-app"
-            $existingDirs = @()
-            if (Test-Path $FepAppDir) {
-                $existingDirs = (Get-ChildItem $FepAppDir -Directory).Name
-            }
-
             tar -xzf $tar.FullName -C $BinOutputPath
-
-            if (Test-Path $FepAppDir) {
-                Get-ChildItem $FepAppDir -Directory | Where-Object { $_.Name -notin $existingDirs } | ForEach-Object {
-                    $dest = Join-Path $BinOutputPath $_.Name
-                    if (Test-Path $dest) { Remove-Item $dest -Recurse -Force -ErrorAction SilentlyContinue }
-                    Copy-Item -Path $_.FullName -Destination $dest -Recurse -Force
-                    Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
-                    Write-Host " ✅ 移出：$($_.Name)"
-                }
-                Remove-Item $FepAppDir -Recurse -Force -ErrorAction SilentlyContinue
-            }
         }
+
+        # 清除 macOS 在 exFAT 上產生的 ._ resource fork 檔案
+        Get-ChildItem $BinOutputPath -Filter "._*" -Recurse -Force -ErrorAction SilentlyContinue |
+            Remove-Item -Force -ErrorAction SilentlyContinue
+        Write-Host " 🧹 已清除 ._ 隱藏檔案"
     } else {
         Write-Host " ⏭️  略過解壓縮"
     }
