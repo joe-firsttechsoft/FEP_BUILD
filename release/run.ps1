@@ -340,6 +340,14 @@ if ($AutoModules.Count -gt 0) {
 
 if ($BinTarFiles -and $BinTarFiles.Count -gt 0) {
     $BinTarFiles | ForEach-Object { Write-Host "   $($_.Name)" }
+
+    # 解壓前清除 output 目錄（含子資料夾）內所有 ._ 檔案
+    $dotUnderscoreFiles = Get-ChildItem $OutputPath -Filter "._*" -Recurse -Force -ErrorAction SilentlyContinue
+    if ($dotUnderscoreFiles) {
+        $dotUnderscoreFiles | Remove-Item -Force -ErrorAction SilentlyContinue
+        Write-Host " 🧹 已清除 $($dotUnderscoreFiles.Count) 個 ._ 檔案"
+    }
+
     Write-Host ""
     $extractChoice = Read-Host " 是否將 bin 套件解壓到 bin 子目錄？[Y/N]（預設 Y）"
 
