@@ -1,22 +1,38 @@
 param(
-    [Parameter(Mandatory=$true)]
-    [ValidateSet("SIT", "UAT")]
+    [ValidateSet("1-2_SIT", "1-3_SIT")]
     [string]$BranchType
 )
+
+# 若未傳入參數，以互動選單詢問
+if (-not $BranchType) {
+    Write-Host ""
+    Write-Host " 請選擇 Branch："
+    Write-Host " [1] FEP_1-2_SIT"
+    Write-Host " [2] FEP_1-3_SIT"
+    $branchInput = Read-Host " 請輸入 [1/2]（預設 1）"
+    $BranchType = switch ($branchInput.Trim()) {
+        "1"  { "1-2_SIT" }
+        ""   { "1-2_SIT" }
+        "2"  { "1-3_SIT" }
+        default { Write-Host " ❌ 無效選項：$branchInput" -ForegroundColor Red; exit 1 }
+    }
+}
 
 # =============================================
 # 環境設定
 # =============================================
 $ScriptDir = $PSScriptRoot
+# 跨平台取得目前使用者名稱（$env:USERNAME 僅 Windows 有，macOS/Linux 需用 $env:USER）
+$UserName = [System.Environment]::UserName
 $RepoPath  = if ($IsWindows) {
-    "C:\Users\$env:USERNAME\Repo\idea_clone\mgbfep"
+    "C:\Users\$UserName\Repo\idea_clone\mgbfep"
 } else {
-    "/Users/teferi/Repo/idea_clone/mgbfep"
+    "/Users/$UserName/Repo/idea_clone/mgbfep"
 }
 $DockerBuildDir = if ($IsWindows) {
-    "C:\Users\$env:USERNAME\Repo\FEP包版\docker-build"
+    "C:\Users\$UserName\Repo\FEP包版\docker-build"
 } else {
-    "/Users/teferi/Repo/FEP包版/docker-build"
+    "/Users/$UserName/Repo/FEP包版/docker-build"
 }
 
 $Python = if ($IsWindows) {
@@ -32,8 +48,8 @@ $env:RELEASE_NOTE_PATH  = Join-Path $RepoPath "source" "fep-release-note"
 $env:COPYFILE_DISABLE = "1"
 
 $GitBranch = switch ($BranchType) {
-    "SIT" { "FEP_1-2_SIT" }
-    "UAT" { "FEP_1-2_UAT" }
+    "1-2_SIT" { "FEP_1-2_SIT" }
+    "1-3_SIT" { "FEP_1-3_SIT" }
 }
 
 # 提前讀取 .env（供 GIT_PULL 警告與包版參數使用）
@@ -396,8 +412,8 @@ Read-Host " 確認無誤後按 Enter 繼續，或按 Ctrl+C 中止"
 # Config 提醒
 # =============================================
 $ConfigFolder = switch ($BranchType) {
-    "SIT" { Join-Path $RepoPath "source" "SIT套config" }
-    "UAT" { Join-Path $RepoPath "source" "UAT套config" }
+    "1-2_SIT" { Join-Path $RepoPath "source" "SIT套config" }
+    "1-3_SIT" { Join-Path $RepoPath "source" "SIT套config" }
 }
 
 Write-Host ""
