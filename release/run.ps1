@@ -71,6 +71,22 @@ Write-Host "================================================"
 Set-Location $RepoPath
 
 # =============================================
+# Helper：步驟失敗時詢問是否繼續或中止
+# =============================================
+function Test-StepResult {
+    param(
+        [string]$StepName,
+        [int]$Code = $LASTEXITCODE
+    )
+    if ($Code -ne 0) {
+        Write-Host ""
+        Write-Host " ❌ $StepName 執行失敗（exit code: $Code）" -ForegroundColor Red
+        $cont = Read-Host " [Enter] 繼續後續步驟 / [Q] 中止"
+        if ($cont -imatch '^[Qq]') { exit $Code }
+    }
+}
+
+# =============================================
 # [1/8] git checkout（僅在非目標 branch 時執行）
 # =============================================
 Write-Host ""
@@ -78,7 +94,7 @@ $currentBranch = (git rev-parse --abbrev-ref HEAD 2>$null).Trim()
 if ($currentBranch -ne $GitBranch) {
     Write-Host "[1/8] git checkout $GitBranch（目前：$currentBranch）"
     git checkout $GitBranch
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    Test-StepResult "git checkout $GitBranch"
 } else {
     Write-Host "[1/8] 已在 $GitBranch，略過 checkout"
 }
@@ -114,7 +130,7 @@ if ($resetPullChoice -ieq "S") {
     git reset --hard HEAD
     Write-Host " git pull origin $GitBranch"
     git pull origin $GitBranch
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    Test-StepResult "git pull origin $GitBranch"
 }
 
 # =============================================
@@ -125,13 +141,14 @@ Write-Host "------------------------------------------------"
 $step3Choice = Read-Host "[3/8] SharePoint 讀取 → txt  [S] 略過 / [Enter] 執行"
 if ($step3Choice -ieq "S") {
     if (-not (Test-Path $env:RELEASE_NOTE_INPUT)) {
-        Write-Host " ❌ 錯誤：略過下載但 txt 不存在：$($env:RELEASE_NOTE_INPUT)"
-        exit 1
+        Write-Host " ❌ 錯誤：略過下載但 txt 不存在：$($env:RELEASE_NOTE_INPUT)" -ForegroundColor Red
+        $cont = Read-Host " [Enter] 繼續後續步驟 / [Q] 中止"
+        if ($cont -imatch '^[Qq]') { exit 1 }
     }
     Write-Host " ⏭️  略過，使用現有 txt"
 } else {
     & $Python (Join-Path $ScriptDir "fetch_release_script.py") $BranchType
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    Test-StepResult "SharePoint 讀取（fetch_release_script.py）"
 }
 
 # 確認 txt 內容（僅在有下載時需確認）
@@ -157,7 +174,7 @@ if ($step4Choice -ieq "S") {
     Write-Host " ⏭️  略過更新 release note，自動略過 [5/8] git commit"
 } else {
     & $Python (Join-Path $ScriptDir "UpdateReleaseNote.py")
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    Test-StepResult "更新 release note（UpdateReleaseNote.py）"
 
     Write-Host ""
     Write-Host "------------------------------------------------"
@@ -336,7 +353,7 @@ if ($skipBuild) {
 
     Set-Location $DockerBuildDir
     docker compose run --rm fep-builder
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    Test-StepResult "Docker build"
     Set-Location $RepoPath
 }
 
