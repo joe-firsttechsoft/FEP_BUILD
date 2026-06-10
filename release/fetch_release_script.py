@@ -75,10 +75,10 @@ def validate_and_fix_script(content):
 SHARE_URL = "https://syscomo365-my.sharepoint.com/:x:/g/personal/824304_syscom_com_tw/IQAniQVtGImOSYhJ7EIBbKDSAXSZhyvoNhOxaDirzjT9JXk?rtime=IAjiXU9l3kg"
 SHEET_NAME = "SIT UAT待過版"
 
-# branch type → Excel 儲存格（0-indexed: V=21, row 24→23, row 36→35）
+# branch type → Excel 儲存格（0-indexed: V=21, row 24→23, row 54→53）
 BRANCH_CELL = {
-    "SIT": (23, 21),  # V24
-    "UAT": (35, 21),  # V36
+    "1-2_SIT": (23, 21),  # V24
+    "1-3_SIT": (53, 21),  # V54
 }
 
 def fetch_excel():
@@ -96,8 +96,8 @@ def read_script(file_bytes, branch_type):
     return str(value).strip() if pd.notna(value) else ""
 
 def main():
-    if len(sys.argv) < 2 or sys.argv[1] not in ("SIT", "UAT"):
-        print("用法：python3 fetch_release_script.py SIT|UAT")
+    if len(sys.argv) < 2 or sys.argv[1] not in ("1-2_SIT", "1-3_SIT"):
+        print("用法：python3 fetch_release_script.py 1-2_SIT|1-3_SIT")
         sys.exit(1)
 
     branch_type = sys.argv[1]
