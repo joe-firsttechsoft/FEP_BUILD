@@ -84,21 +84,34 @@ if ($currentBranch -ne $GitBranch) {
 }
 
 # =============================================
-# [2/8] git reset --hard + git pull（pull 可 skip）
+# [2/8] git reset --hard + git pull（可個別 skip）
 # =============================================
 Write-Host ""
-Write-Host "[2/8] git reset --hard HEAD"
-git reset --hard HEAD
-
-Write-Host ""
+Write-Host "[2/8] git reset / pull"
 Write-Host "------------------------------------------------"
-$pullChoice = Read-Host " git pull  [S] 略過 / [Enter] 執行"
-if ($pullChoice -ieq "S") {
-    Write-Host " ⏭️  略過 git pull"
+
+# 顯示未 commit 的差異
+$diffStat = git diff --stat HEAD 2>$null
+$statusOut = git status --short 2>$null
+if ($diffStat -or $statusOut) {
+    Write-Host " 📋 目前未 commit 的變更："
+    if ($statusOut) { $statusOut | ForEach-Object { Write-Host "   $_" } }
+    if ($diffStat)  { $diffStat  | ForEach-Object { Write-Host "   $_" } }
+} else {
+    Write-Host " ✅ 目前無未 commit 的變更"
+}
+
+Write-Host "------------------------------------------------"
+$resetPullChoice = Read-Host " git reset --hard + pull  [S] 略過 / [Enter] 執行"
+
+if ($resetPullChoice -ieq "S") {
+    Write-Host " ⏭️  略過 git reset + pull"
     if ($EnvVars["GIT_PULL"] -ine "true") {
         Write-Host " ⚠️  警告：略過 pull 且 container GIT_PULL 非 true，docker build 可能使用舊版程式碼" -ForegroundColor Yellow
     }
 } else {
+    Write-Host " git reset --hard HEAD"
+    git reset --hard HEAD
     Write-Host " git pull origin $GitBranch"
     git pull origin $GitBranch
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
