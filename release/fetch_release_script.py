@@ -75,11 +75,12 @@ def validate_and_fix_script(content):
 SHARE_URL = "https://syscomo365-my.sharepoint.com/:x:/g/personal/824304_syscom_com_tw/IQAniQVtGImOSYhJ7EIBbKDSAXSZhyvoNhOxaDirzjT9JXk?rtime=IAjiXU9l3kg"
 SHEET_NAME = "SIT UAT待過版"
 
-# branch type → Excel 儲存格（0-indexed: V=21, row 24→23, row 54→53）
-BRANCH_CELL = {
-    "1-2_SIT": (23, 21),  # V24
-    "1-3_SIT": (53, 21),  # V54
+# branch type → A 欄搜尋關鍵字
+BRANCH_KEYWORD = {
+    "1-2_SIT": "P1-2 SIT",
+    "1-3_SIT": "P1-3 SIT",
 }
+COL_V = 21  # V 欄（0-indexed）
 
 def fetch_excel():
     """從 SharePoint 下載 Excel"""
@@ -89,10 +90,20 @@ def fetch_excel():
     return response.content
 
 def read_script(file_bytes, branch_type):
-    """讀取對應 branch 的更新版號 script"""
-    row, col = BRANCH_CELL[branch_type]
+    """搜尋 A 欄找到對應 branch 的列，讀取 V 欄文字"""
+    keyword = BRANCH_KEYWORD[branch_type]
     df = pd.read_excel(io.BytesIO(file_bytes), sheet_name=SHEET_NAME, header=None)
-    value = df.iloc[row, col]
+
+    col_a = df.iloc[:, 0].astype(str).str.strip()
+    matched = col_a[col_a == keyword]
+
+    if matched.empty:
+        print(f"❌ 在 A 欄找不到「{keyword}」")
+        return ""
+
+    row = matched.index[0]
+    print(f"    找到「{keyword}」於第 {row + 1} 列")
+    value = df.iloc[row, COL_V]
     return str(value).strip() if pd.notna(value) else ""
 
 def main():
