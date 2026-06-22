@@ -153,11 +153,11 @@ if ($step3Choice -ieq "S") {
 
 # 確認 txt 內容（僅在有下載時需確認）
 if ($step3Choice -ine "S") {
-    Invoke-Item $env:RELEASE_NOTE_INPUT
     Write-Host ""
     Write-Host "------------------------------------------------"
-    Write-Host " 📄 請確認 txt 內容是否正確"
-    Write-Host " 檔案：$($env:RELEASE_NOTE_INPUT)"
+    Write-Host " 📄 txt 內容（本次下載）：$($env:RELEASE_NOTE_INPUT)"
+    Write-Host "------------------------------------------------"
+    Get-Content $env:RELEASE_NOTE_INPUT | ForEach-Object { Write-Host "   $_" }
     Write-Host "------------------------------------------------"
     Read-Host " 確認無誤後按 Enter 繼續，或按 Ctrl+C 中止"
 }
