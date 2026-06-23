@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("1-2_SIT", "1-3_SIT")]
+    [ValidateSet("1-2_SIT", "1-3_SIT", "1-2_UAT")]
     [string]$BranchType
 )
 
@@ -9,11 +9,13 @@ if (-not $BranchType) {
     Write-Host " 請選擇 Branch："
     Write-Host " [1] FEP_1-2_SIT"
     Write-Host " [2] FEP_1-3_SIT"
-    $branchInput = Read-Host " 請輸入 [1/2]（預設 1）"
+    Write-Host " [3] FEP_1-2_UAT"
+    $branchInput = Read-Host " 請輸入 [1/2/3]（預設 1）"
     $BranchType = switch ($branchInput.Trim()) {
         "1"  { "1-2_SIT" }
         ""   { "1-2_SIT" }
         "2"  { "1-3_SIT" }
+        "3"  { "1-2_UAT" }
         default { Write-Host " ❌ 無效選項：$branchInput" -ForegroundColor Red; exit 1 }
     }
 }
@@ -50,6 +52,7 @@ $env:COPYFILE_DISABLE = "1"
 $GitBranch = switch ($BranchType) {
     "1-2_SIT" { "FEP_1-2_SIT" }
     "1-3_SIT" { "FEP_1-3_SIT" }
+    "1-2_UAT" { "FEP_1-2_UAT" }
 }
 
 # 提前讀取 .env（供 GIT_PULL 警告與包版參數使用）
@@ -133,80 +136,89 @@ if ($resetPullChoice -ieq "S") {
     Test-StepResult "git pull origin $GitBranch"
 }
 
-# =============================================
-# [3/8] SharePoint 讀取 → txt（可 skip）
-# =============================================
-Write-Host ""
-Write-Host "------------------------------------------------"
-$step3Choice = Read-Host "[3/8] SharePoint 讀取 → txt  [S] 略過 / [Enter] 執行"
-if ($step3Choice -ieq "S") {
-    if (-not (Test-Path $env:RELEASE_NOTE_INPUT)) {
-        Write-Host " ❌ 錯誤：略過下載但 txt 不存在：$($env:RELEASE_NOTE_INPUT)" -ForegroundColor Red
-        $cont = Read-Host " [Enter] 繼續後續步驟 / [Q] 中止"
-        if ($cont -imatch '^[Qq]') { exit 1 }
-    }
-    Write-Host " ⏭️  略過，使用現有 txt"
-} else {
-    & $Python (Join-Path $ScriptDir "fetch_release_script.py") $BranchType
-    Test-StepResult "SharePoint 讀取（fetch_release_script.py）"
-}
+# 初始化（UAT 模式略過 [3-5/8]，確保後續步驟變數已定義）
+$step3Choice = "S"
+$skipCommit  = $true
 
-# 確認 txt 內容（僅在有下載時需確認）
-if ($step3Choice -ine "S") {
+if ($BranchType -eq "1-2_UAT") {
+    Write-Host ""
+    Write-Host "[3-5/8] UAT 模式 → 略過 SharePoint 讀取 / release note 更新 / git commit"
+} else {
+    # =============================================
+    # [3/8] SharePoint 讀取 → txt（可 skip）
+    # =============================================
     Write-Host ""
     Write-Host "------------------------------------------------"
-    Write-Host " 📄 txt 內容（本次下載）：$($env:RELEASE_NOTE_INPUT)"
-    Write-Host "------------------------------------------------"
-    Get-Content $env:RELEASE_NOTE_INPUT | ForEach-Object { Write-Host "   $_" }
-    Write-Host "------------------------------------------------"
-    Read-Host " 確認無誤後按 Enter 繼續，或按 Ctrl+C 中止"
-}
-
-# =============================================
-# [4/8] txt → release note（可 skip，skip 則自動 skip [5]）
-# =============================================
-$skipCommit = $false
-Write-Host ""
-Write-Host "------------------------------------------------"
-$step4Choice = Read-Host "[4/8] 更新 release note  [S] 略過（連帶略過 git commit）/ [Enter] 執行"
-if ($step4Choice -ieq "S") {
-    $skipCommit = $true
-    Write-Host " ⏭️  略過更新 release note，自動略過 [5/8] git commit"
-} else {
-    & $Python (Join-Path $ScriptDir "UpdateReleaseNote.py")
-    Test-StepResult "更新 release note（UpdateReleaseNote.py）"
-
-    Write-Host ""
-    Write-Host "------------------------------------------------"
-    Write-Host " 請確認以下 release note 變更是否正確"
-    Write-Host "------------------------------------------------"
-    git diff source/fep-release-note/
-    Write-Host "------------------------------------------------"
-    Read-Host " 確認無誤後按 Enter 繼續，或按 Ctrl+C 中止"
-}
-
-# =============================================
-# [5/8] git commit release note（[4] skip 則自動 skip，否則可 skip）
-# =============================================
-Write-Host ""
-if ($skipCommit) {
-    Write-Host "[5/8] git commit → [4/8] 已略過，自動略過"
-} else {
-    Write-Host "------------------------------------------------"
-    $step5Choice = Read-Host "[5/8] git commit release note  [S] 略過 / [Enter] 執行"
-    if ($step5Choice -ieq "S") {
-        Write-Host " ⏭️  略過 git commit"
+    $step3Choice = Read-Host "[3/8] SharePoint 讀取 → txt  [S] 略過 / [Enter] 執行"
+    if ($step3Choice -ieq "S") {
+        if (-not (Test-Path $env:RELEASE_NOTE_INPUT)) {
+            Write-Host " ❌ 錯誤：略過下載但 txt 不存在：$($env:RELEASE_NOTE_INPUT)" -ForegroundColor Red
+            $cont = Read-Host " [Enter] 繼續後續步驟 / [Q] 中止"
+            if ($cont -imatch '^[Qq]') { exit 1 }
+        }
+        Write-Host " ⏭️  略過，使用現有 txt"
     } else {
-        git add (Join-Path "source" "fep-release-note")
-        git commit -m "更新版號"
+        & $Python (Join-Path $ScriptDir "fetch_release_script.py") $BranchType
+        Test-StepResult "SharePoint 讀取（fetch_release_script.py）"
+    }
+
+    # 確認 txt 內容（僅在有下載時需確認）
+    if ($step3Choice -ine "S") {
+        Write-Host ""
+        Write-Host "------------------------------------------------"
+        Write-Host " 📄 txt 內容（本次下載）：$($env:RELEASE_NOTE_INPUT)"
+        Write-Host "------------------------------------------------"
+        Get-Content $env:RELEASE_NOTE_INPUT | ForEach-Object { Write-Host "   $_" }
+        Write-Host "------------------------------------------------"
+        Read-Host " 確認無誤後按 Enter 繼續，或按 Ctrl+C 中止"
+    }
+
+    # =============================================
+    # [4/8] txt → release note（可 skip，skip 則自動 skip [5]）
+    # =============================================
+    $skipCommit = $false
+    Write-Host ""
+    Write-Host "------------------------------------------------"
+    $step4Choice = Read-Host "[4/8] 更新 release note  [S] 略過（連帶略過 git commit）/ [Enter] 執行"
+    if ($step4Choice -ieq "S") {
+        $skipCommit = $true
+        Write-Host " ⏭️  略過更新 release note，自動略過 [5/8] git commit"
+    } else {
+        & $Python (Join-Path $ScriptDir "UpdateReleaseNote.py")
+        Test-StepResult "更新 release note（UpdateReleaseNote.py）"
 
         Write-Host ""
         Write-Host "------------------------------------------------"
-        Write-Host " 請確認 commit 內容是否正確"
+        Write-Host " 請確認以下 release note 變更是否正確"
         Write-Host "------------------------------------------------"
-        git show --stat HEAD
+        git diff source/fep-release-note/
         Write-Host "------------------------------------------------"
         Read-Host " 確認無誤後按 Enter 繼續，或按 Ctrl+C 中止"
+    }
+
+    # =============================================
+    # [5/8] git commit release note（[4] skip 則自動 skip，否則可 skip）
+    # =============================================
+    Write-Host ""
+    if ($skipCommit) {
+        Write-Host "[5/8] git commit → [4/8] 已略過，自動略過"
+    } else {
+        Write-Host "------------------------------------------------"
+        $step5Choice = Read-Host "[5/8] git commit release note  [S] 略過 / [Enter] 執行"
+        if ($step5Choice -ieq "S") {
+            Write-Host " ⏭️  略過 git commit"
+        } else {
+            git add (Join-Path "source" "fep-release-note")
+            git commit -m "更新版號"
+
+            Write-Host ""
+            Write-Host "------------------------------------------------"
+            Write-Host " 請確認 commit 內容是否正確"
+            Write-Host "------------------------------------------------"
+            git show --stat HEAD
+            Write-Host "------------------------------------------------"
+            Read-Host " 確認無誤後按 Enter 繼續，或按 Ctrl+C 中止"
+        }
     }
 }
 
@@ -321,30 +333,36 @@ if ($skipBuild) {
     Write-Host " 輸出路徑 : $OutputPath"
     Write-Host ""
 
-    if ($isCmdlineOnly) {
-        Write-Host " 📋 release note 僅含 cmdline 模組，不需要包版" -ForegroundColor Yellow
-        Read-Host " 按 Enter 結束，或按 Ctrl+C 中止"
-        exit 0
-    }
-
-    $txtSource = if ($step3Choice -ieq "S") { "⚠️  使用既有 txt（非本次下載）" } else { "本次下載" }
-    Write-Host " [A] 全 build（手動選擇 BUILD_MODE）"
-    if ($AutoModules.Count -gt 0) {
-        Write-Host " [B] 依 release note 部分 build  【來源：$txtSource】"
-        Write-Host "     偵測到的 Maven 模組：$($AutoModules -join ', ')"
-    } else {
-        Write-Host " [B] 依 release note 部分 build  ⚠️  未偵測到可對應模組，無法選擇"
-    }
-    Write-Host "------------------------------------------------"
-    $buildChoice = Read-Host " 請選擇 [A/B]（預設 B）"
-    if ($buildChoice -match '^\s*$') { $buildChoice = "B" }
-
-    Write-Host ""
-    if ($buildChoice -ieq "B" -and $AutoModules.Count -gt 0) {
-        $BuildModules = $AutoModules -join ","
-        Write-Host " ✅ 部分 build 模組：$BuildModules"
-    } else {
+    if ($BranchType -eq "1-2_UAT") {
+        # UAT：直接全 build，選 BUILD_MODE
+        Write-Host " UAT 模式：全 build"
         $BuildMode = Select-BuildMode -Current $BuildMode
+    } else {
+        if ($isCmdlineOnly) {
+            Write-Host " 📋 release note 僅含 cmdline 模組，不需要包版" -ForegroundColor Yellow
+            Read-Host " 按 Enter 結束，或按 Ctrl+C 中止"
+            exit 0
+        }
+
+        $txtSource = if ($step3Choice -ieq "S") { "⚠️  使用既有 txt（非本次下載）" } else { "本次下載" }
+        Write-Host " [A] 全 build（手動選擇 BUILD_MODE）"
+        if ($AutoModules.Count -gt 0) {
+            Write-Host " [B] 依 release note 部分 build  【來源：$txtSource】"
+            Write-Host "     偵測到的 Maven 模組：$($AutoModules -join ', ')"
+        } else {
+            Write-Host " [B] 依 release note 部分 build  ⚠️  未偵測到可對應模組，無法選擇"
+        }
+        Write-Host "------------------------------------------------"
+        $buildChoice = Read-Host " 請選擇 [A/B]（預設 B）"
+        if ($buildChoice -match '^\s*$') { $buildChoice = "B" }
+
+        Write-Host ""
+        if ($buildChoice -ieq "B" -and $AutoModules.Count -gt 0) {
+            $BuildModules = $AutoModules -join ","
+            Write-Host " ✅ 部分 build 模組：$BuildModules"
+        } else {
+            $BuildMode = Select-BuildMode -Current $BuildMode
+        }
     }
 
     $env:BUILD_MODE    = $BuildMode
@@ -381,7 +399,7 @@ if ($AutoModules.Count -gt 0) {
     }
 } else {
     $BinTarFiles = $AllBinTarFiles
-    Write-Host " bin 套件（未偵測到 release note 模組，顯示全部）："
+    Write-Host " bin 套件（顯示全部）："
 }
 
 if ($BinTarFiles -and $BinTarFiles.Count -gt 0) {
@@ -444,6 +462,7 @@ Read-Host " 確認無誤後按 Enter 繼續，或按 Ctrl+C 中止"
 $ConfigFolder = switch ($BranchType) {
     "1-2_SIT" { Join-Path $RepoPath "source" "SIT套config" }
     "1-3_SIT" { Join-Path $RepoPath "source" "SIT套config" }
+    "1-2_UAT" { Join-Path $RepoPath "source" "UAT套config" }
 }
 
 Write-Host ""
