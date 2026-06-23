@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("1-2_SIT", "1-3_SIT", "1-2_UAT")]
+    [ValidateSet("1-3_SIT", "1-3_UAT")]
     [string]$BranchType
 )
 
@@ -7,15 +7,13 @@ param(
 if (-not $BranchType) {
     Write-Host ""
     Write-Host " 請選擇 Branch："
-    Write-Host " [1] FEP_1-2_SIT"
-    Write-Host " [2] FEP_1-3_SIT"
-    Write-Host " [3] FEP_1-2_UAT"
-    $branchInput = Read-Host " 請輸入 [1/2/3]（預設 1）"
+    Write-Host " [1] FEP_1-3_SIT"
+    Write-Host " [2] FEP_1-3_UAT"
+    $branchInput = Read-Host " 請輸入 [1/2]（預設 1）"
     $BranchType = switch ($branchInput.Trim()) {
-        "1"  { "1-2_SIT" }
-        ""   { "1-2_SIT" }
-        "2"  { "1-3_SIT" }
-        "3"  { "1-2_UAT" }
+        "1"  { "1-3_SIT" }
+        ""   { "1-3_SIT" }
+        "2"  { "1-3_UAT" }
         default { Write-Host " ❌ 無效選項：$branchInput" -ForegroundColor Red; exit 1 }
     }
 }
@@ -50,9 +48,8 @@ $env:RELEASE_NOTE_PATH  = Join-Path $RepoPath "source" "fep-release-note"
 $env:COPYFILE_DISABLE = "1"
 
 $GitBranch = switch ($BranchType) {
-    "1-2_SIT" { "FEP_1-2_SIT" }
     "1-3_SIT" { "FEP_1-3_SIT" }
-    "1-2_UAT" { "FEP_1-2_UAT" }
+    "1-3_UAT" { "FEP_1-3_UAT" }
 }
 
 # 提前讀取 .env（供 GIT_PULL 警告與包版參數使用）
@@ -140,7 +137,7 @@ if ($resetPullChoice -ieq "S") {
 $step3Choice = "S"
 $skipCommit  = $true
 
-if ($BranchType -eq "1-2_UAT") {
+if ($BranchType -eq "1-3_UAT") {
     Write-Host ""
     Write-Host "[3-5/8] UAT 模式 → 略過 SharePoint 讀取 / release note 更新 / git commit"
 } else {
@@ -333,7 +330,7 @@ if ($skipBuild) {
     Write-Host " 輸出路徑 : $OutputPath"
     Write-Host ""
 
-    if ($BranchType -eq "1-2_UAT") {
+    if ($BranchType -eq "1-3_UAT") {
         # UAT：直接全 build，選 BUILD_MODE
         Write-Host " UAT 模式：全 build"
         $BuildMode = Select-BuildMode -Current $BuildMode
@@ -459,9 +456,8 @@ Read-Host " 確認無誤後按 Enter 繼續，或按 Ctrl+C 中止"
 # Config 提醒
 # =============================================
 $ConfigFolder = switch ($BranchType) {
-    "1-2_SIT" { Join-Path $RepoPath "source" "SIT套config" }
     "1-3_SIT" { Join-Path $RepoPath "source" "SIT套config" }
-    "1-2_UAT" { Join-Path $RepoPath "source" "UAT套config" }
+    "1-3_UAT" { Join-Path $RepoPath "source" "UAT套config" }
 }
 
 Write-Host ""
