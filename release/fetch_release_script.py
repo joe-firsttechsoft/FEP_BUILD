@@ -75,9 +75,9 @@ def validate_and_fix_script(content):
 SHARE_URL = "https://syscomo365-my.sharepoint.com/:x:/g/personal/824304_syscom_com_tw/IQAniQVtGImOSYhJ7EIBbKDSAXSZhyvoNhOxaDirzjT9JXk?rtime=IAjiXU9l3kg"
 SHEET_NAME = "SIT UAT待過版"
 
-# branch type → A 欄搜尋關鍵字
+# branch type → A 欄搜尋關鍵字（list，依序讀取後合併寫入）
 BRANCH_KEYWORD = {
-    "1-3_SIT": "P1-3 SIT",
+    "1-3_SIT": ["P1-2 SIT", "P1-3 SIT"],
 }
 COL_V = 21  # V 欄（0-indexed）
 
@@ -89,21 +89,25 @@ def fetch_excel():
     return response.content
 
 def read_script(file_bytes, branch_type):
-    """搜尋 A 欄找到對應 branch 的列，讀取 V 欄文字"""
-    keyword = BRANCH_KEYWORD[branch_type]
+    """搜尋 A 欄找到各關鍵字的列，讀取 V 欄文字後合併回傳"""
+    keywords = BRANCH_KEYWORD[branch_type]
     df = pd.read_excel(io.BytesIO(file_bytes), sheet_name=SHEET_NAME, header=None)
-
     col_a = df.iloc[:, 0].astype(str).str.strip()
-    matched = col_a[col_a == keyword]
 
-    if matched.empty:
-        print(f"❌ 在 A 欄找不到「{keyword}」")
-        return ""
+    scripts = []
+    for keyword in keywords:
+        matched = col_a[col_a == keyword]
+        if matched.empty:
+            print(f"❌ 在 A 欄找不到「{keyword}」")
+            return ""
+        row = matched.index[0]
+        print(f"    找到「{keyword}」於第 {row + 1} 列")
+        value = df.iloc[row, COL_V]
+        text = str(value).strip() if pd.notna(value) else ""
+        if text:
+            scripts.append(text)
 
-    row = matched.index[0]
-    print(f"    找到「{keyword}」於第 {row + 1} 列")
-    value = df.iloc[row, COL_V]
-    return str(value).strip() if pd.notna(value) else ""
+    return "\n".join(scripts)
 
 def main():
     if len(sys.argv) < 2 or sys.argv[1] not in ("1-3_SIT",):
