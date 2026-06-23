@@ -385,17 +385,16 @@ Write-Host "------------------------------------------------"
 
 $AllBinTarFiles = Get-ChildItem $OutputPath -Filter "*bin*.tar.gz" -ErrorAction SilentlyContinue | Sort-Object Name
 
-# 若有偵測到 release note 模組，依模組名稱前綴篩選
-if ($AutoModules.Count -gt 0) {
+# 僅在本次有重新下載 release note 時才依模組篩選；略過下載則一律顯示全部
+if ($AutoModules.Count -gt 0 -and $step3Choice -ine "S") {
     $BinTarFiles = $AllBinTarFiles | Where-Object {
         $name = $_.Name
         $AutoModules | Where-Object { $name -like "$_*" }
     }
-    $txtSource = if ($step3Choice -ieq "S") { "⚠️  既有 txt" } else { "本次下載" }
     if ($BinTarFiles.Count -lt $AllBinTarFiles.Count) {
-        Write-Host " 依 release note 篩選後的 bin 套件【來源：$txtSource】（共 $($AllBinTarFiles.Count) 個，篩選後 $($BinTarFiles.Count) 個）："
+        Write-Host " 依 release note 篩選後的 bin 套件（共 $($AllBinTarFiles.Count) 個，篩選後 $($BinTarFiles.Count) 個）："
     } else {
-        Write-Host " bin 套件【來源：$txtSource】："
+        Write-Host " bin 套件："
     }
 } else {
     $BinTarFiles = $AllBinTarFiles
