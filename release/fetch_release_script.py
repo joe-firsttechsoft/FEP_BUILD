@@ -77,7 +77,6 @@ SHEET_NAME = "SIT UAT待過版"
 
 # branch type → A 欄搜尋關鍵字
 BRANCH_KEYWORD = {
-    "1-2_SIT": "P1-2 SIT",
     "1-3_SIT": "P1-3 SIT",
 }
 COL_V = 21  # V 欄（0-indexed）
@@ -107,8 +106,8 @@ def read_script(file_bytes, branch_type):
     return str(value).strip() if pd.notna(value) else ""
 
 def main():
-    if len(sys.argv) < 2 or sys.argv[1] not in ("1-2_SIT", "1-3_SIT"):
-        print("用法：python3 fetch_release_script.py 1-2_SIT|1-3_SIT")
+    if len(sys.argv) < 2 or sys.argv[1] not in ("1-3_SIT",):
+        print("用法：python3 fetch_release_script.py 1-3_SIT")
         sys.exit(1)
 
     branch_type = sys.argv[1]
