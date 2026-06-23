@@ -35,3 +35,4 @@ Icon
 # Claude Code
 .claude/
 release/ReleaseNoteUpdateData.txt
+release/mgb-build
