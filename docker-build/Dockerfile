@@ -21,7 +21,7 @@ ENV LC_ALL=zh_TW.UTF-8
 ENV TZ=Asia/Taipei
 
 COPY scripts/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+RUN sed -i 's/\r$//' /entrypoint.sh && chmod +x /entrypoint.sh
 
 WORKDIR /workspace
 ENTRYPOINT ["/entrypoint.sh"]
