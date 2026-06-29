@@ -66,11 +66,12 @@ $GitBranch = switch ($BranchType) {
     "1-3_UAT" { "FEP_1-3_UAT" }
 }
 
-# 提前讀取 .env（供 GIT_PULL 警告與包版參數使用）
-$EnvFile = Join-Path $DockerBuildDir ".env"
+# 依平台選擇對應的 .env（路徑格式不同，Windows/macOS 分開維護）
+$EnvFileName = if ($IsWindows) { ".env.windows" } else { ".env.macos" }
+$EnvFile = Join-Path $DockerBuildDir $EnvFileName
 if (-not (Test-Path $EnvFile)) {
-    Write-Host " ❌ 找不到 .env：$EnvFile" -ForegroundColor Red
-    Write-Host " 請確認 docker-build/.env 是否存在（可從 .env.example 複製後依需求修改）" -ForegroundColor Yellow
+    Write-Host " ❌ 找不到 $EnvFileName：$EnvFile" -ForegroundColor Red
+    Write-Host " 請從 $EnvFileName.example 複製一份，依本機路徑修改後使用" -ForegroundColor Yellow
     exit 1
 }
 $EnvVars = @{}
@@ -393,7 +394,7 @@ if ($skipBuild) {
     $env:BRANCH        = $GitBranch
 
     Set-Location $DockerBuildDir
-    docker compose run --rm fep-builder
+    docker compose --env-file $EnvFileName run --rm fep-builder
     Test-StepResult "Docker build"
     Set-Location $RepoPath
 }
