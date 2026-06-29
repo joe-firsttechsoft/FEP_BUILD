@@ -84,6 +84,11 @@ Write-Host " FEP Release Note 更新 & 包版工具"
 Write-Host " Branch : $GitBranch"
 Write-Host "================================================"
 
+# 記錄原始目錄，腳本結束（含中途 exit）時切回去，避免切換到專案資料夾
+$OriginalLocation = Get-Location
+
+try {
+
 Set-Location $RepoPath
 
 # =============================================
@@ -492,3 +497,7 @@ Write-Host ""
 Write-Host "================================================"
 Write-Host " ✅ 完成"
 Write-Host "================================================"
+
+} finally {
+    Set-Location $OriginalLocation
+}
