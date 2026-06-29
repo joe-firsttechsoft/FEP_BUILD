@@ -41,6 +41,22 @@ $Python = if ($IsWindows) {
     Join-Path $ScriptDir "myenv/bin/python3"
 }
 
+if (-not (Test-Path $Python)) {
+    Write-Host " ❌ 找不到虛擬環境 Python：$Python" -ForegroundColor Red
+    Write-Host " 此機器尚未建立 myenv（venv 不能跨平台搬用，每台機器需自行建立），請執行：" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "   cd `"$ScriptDir`""
+    if ($IsWindows) {
+        Write-Host "   python -m venv myenv"
+        Write-Host "   .\myenv\Scripts\python.exe -m pip install requests pandas openpyxl"
+    } else {
+        Write-Host "   python3 -m venv myenv"
+        Write-Host "   ./myenv/bin/python3 -m pip install requests pandas openpyxl"
+    }
+    Write-Host ""
+    exit 1
+}
+
 $env:RELEASE_NOTE_INPUT = Join-Path $ScriptDir "ReleaseNoteUpdateData.txt"
 $env:RELEASE_NOTE_PATH  = Join-Path $RepoPath "source" "fep-release-note"
 
