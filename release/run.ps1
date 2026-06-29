@@ -29,11 +29,9 @@ $RepoPath  = if ($IsWindows) {
 } else {
     "/Users/$UserName/Repo/idea_clone/mgbfep"
 }
-$DockerBuildDir = if ($IsWindows) {
-    "C:\Users\$UserName\Repo\FEP包版\docker-build"
-} else {
-    "/Users/$UserName/Repo/FEP包版/docker-build"
-}
+# docker-build 是本 repo（release/ 的上一層）的同層資料夾，
+# 用相對路徑推算，避免不同機器上 repo 資料夾名稱不一致（例如 Windows 上叫 FEP_BUILD）導致路徑找不到
+$DockerBuildDir = Join-Path (Split-Path $ScriptDir -Parent) "docker-build"
 
 $Python = if ($IsWindows) {
     Join-Path $ScriptDir "myenv\Scripts\python.exe"
@@ -70,14 +68,21 @@ $GitBranch = switch ($BranchType) {
 
 # 提前讀取 .env（供 GIT_PULL 警告與包版參數使用）
 $EnvFile = Join-Path $DockerBuildDir ".env"
+if (-not (Test-Path $EnvFile)) {
+    Write-Host " ❌ 找不到 .env：$EnvFile" -ForegroundColor Red
+    Write-Host " 請確認 docker-build/.env 是否存在（可從 .env.example 複製後依需求修改）" -ForegroundColor Yellow
+    exit 1
+}
 $EnvVars = @{}
-if (Test-Path $EnvFile) {
-    Get-Content $EnvFile | Where-Object { $_ -match '^\s*[^#]' -and $_ -match '=' } | ForEach-Object {
-        $key, $val = $_ -split '=', 2
-        $EnvVars[$key.Trim()] = $val.Trim()
-    }
+Get-Content $EnvFile | Where-Object { $_ -match '^\s*[^#]' -and $_ -match '=' } | ForEach-Object {
+    $key, $val = $_ -split '=', 2
+    $EnvVars[$key.Trim()] = $val.Trim()
 }
 $OutputPath = $EnvVars["HOST_OUTPUT_PATH"]
+if (-not $OutputPath) {
+    Write-Host " ❌ .env 中未設定 HOST_OUTPUT_PATH：$EnvFile" -ForegroundColor Red
+    exit 1
+}
 
 Write-Host "================================================"
 Write-Host " FEP Release Note 更新 & 包版工具"
