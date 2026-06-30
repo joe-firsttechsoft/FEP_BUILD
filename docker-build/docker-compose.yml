@@ -18,5 +18,11 @@ services:
       - ${FEP_REPO_PATH}:${REPO_PATH:-/workspace/repo}
       # 建置產出物輸出路徑（host 端由 HOST_OUTPUT_PATH 設定，container 端由 CONTAINER_OUTPUT_PATH 設定）
       - ${HOST_OUTPUT_PATH}:${CONTAINER_OUTPUT_PATH:-/build/output}
-      # 重用 Host 的 Maven 快取，避免重新下載耗費手機流量（由 .env M2_PATH 設定）
+      # 重用 Maven 快取，避免重新下載（macOS: bind mount path；Windows: named volume fep-m2-cache，繞過 WSL2 slow mount）
       - ${M2_PATH}:/root/.m2
+
+volumes:
+  fep-m2-cache:
+    name: fep-m2-cache   # 明確指定名稱，避免 Compose 自動加 docker-build_ 前綴
+    # Windows 用 M2_PATH=fep-m2-cache 啟用此 named volume（住在 Linux 層，效能佳）
+    # macOS 用 M2_PATH=/Users/.../.m2 走 bind mount，此 volume 宣告不會被使用

@@ -393,6 +393,36 @@ if ($skipBuild) {
     $env:BUILD_MODULES = $BuildModules
     $env:BRANCH        = $GitBranch
 
+    # [Windows 限定] Maven cache volume 初始化檢查（僅在 volume 不存在時觸發）
+    if ($IsWindows) {
+        $m2Path = $EnvVars["M2_PATH"]
+        if ($m2Path -and -not ($m2Path -match '[/\\]')) {
+            $null = docker volume inspect $m2Path 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                $localM2 = "C:\Users\$UserName\.m2"
+                Write-Host ""
+                Write-Host " ⚠️  Maven cache volume '$m2Path' 尚未建立（首次使用）" -ForegroundColor Yellow
+                if (Test-Path $localM2) {
+                    Write-Host " 偵測到本機 .m2：$localM2"
+                    $initChoice = Read-Host " 是否將現有 .m2 複製進 volume？（Y/Enter=是，N=略過，略過則 Maven 需重新下載 ~2.5GB）"
+                    if ($initChoice -inotmatch '^[Nn]') {
+                        Write-Host " 複製中，請稍候（約 1~2 分鐘）..."
+                        docker run --rm -v "${m2Path}:/target" -v "${localM2}:/source:ro" alpine sh -c "cp -a /source/. /target/"
+                        if ($LASTEXITCODE -eq 0) {
+                            Write-Host " ✅ Maven cache 已複製至 volume：$m2Path" -ForegroundColor Green
+                        } else {
+                            Write-Host " ❌ 複製失敗，後續 build 將從網路重新下載依賴" -ForegroundColor Red
+                        }
+                    } else {
+                        Write-Host " ⏭️  略過複製，Maven 將在 build 時從網路下載依賴" -ForegroundColor Yellow
+                    }
+                } else {
+                    Write-Host " ℹ️  未找到本機 .m2（$localM2），Maven 將在 build 時自動下載依賴"
+                }
+            }
+        }
+    }
+
     Set-Location $DockerBuildDir
     docker compose --env-file $EnvFileName run --rm fep-builder
     Test-StepResult "Docker build"
