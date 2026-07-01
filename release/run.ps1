@@ -313,6 +313,118 @@ function Select-BuildMode {
 }
 
 # =============================================
+# Helper：Native build（Windows 本機直接呼叫 mvn，不走 Docker）
+# 邏輯與 entrypoint.sh 一致：依 BuildMode / BuildModules 執行 mvn，並收集 WAR / batch-task JAR
+# =============================================
+function Invoke-NativeBuild {
+    param(
+        [string]$Mvn,
+        [string]$JavaHome,
+        [string]$RepoPath,
+        [string]$OutputPath,
+        [string]$BuildMode,
+        [string]$BuildModules
+    )
+
+    if ($JavaHome) {
+        $env:JAVA_HOME = $JavaHome
+        $env:PATH = "$(Join-Path $JavaHome 'bin')$([System.IO.Path]::PathSeparator)$env:PATH"
+    }
+
+    $fepPath      = Join-Path $RepoPath "source\fep"
+    $assemblyArgs = @("-Dassembly-output-path=$OutputPath", "-Dassembly-batch-task-output-path=$OutputPath")
+    $collectWar   = $false
+    $collectJar   = $true
+
+    if ($BuildModules) {
+        Write-Host " [Maven] 部分建置：$BuildModules"
+        Push-Location $fepPath
+        & $Mvn clean install -pl $BuildModules -am @assemblyArgs -f pom.xml -B
+        Test-StepResult "mvn 部分 build（$BuildModules）"
+        if ($BuildModules -match "fep-web") {
+            & $Mvn install -pl fep-web -Pwar -am @assemblyArgs -f pom.xml -B
+            Test-StepResult "mvn fep-web WAR"
+            $collectWar = $true
+        }
+        Pop-Location
+    } else {
+        switch ($BuildMode) {
+            "+web" {
+                Write-Host " [Maven] 全 build + WAR"
+                Push-Location $fepPath
+                & $Mvn clean install @assemblyArgs -f pom.xml -B
+                Test-StepResult "mvn clean install"
+                & $Mvn install -pl fep-web -Pwar -am @assemblyArgs -f pom.xml -B
+                Test-StepResult "mvn fep-web WAR"
+                Pop-Location
+                $collectWar = $true
+            }
+            "-Pwar" {
+                Write-Host " [Maven] 全 build（JAR + WAR）"
+                Push-Location $fepPath
+                & $Mvn clean install -Pwar @assemblyArgs -f pom.xml -B
+                Test-StepResult "mvn clean install -Pwar"
+                Pop-Location
+                $collectWar = $true
+            }
+            "-web" {
+                Write-Host " [Maven] 僅 fep-web WAR"
+                Push-Location $fepPath
+                & $Mvn clean install -pl fep-web -Pwar -am @assemblyArgs -f pom.xml -B
+                Test-StepResult "mvn fep-web WAR"
+                Pop-Location
+                $collectJar = $false
+                $collectWar = $true
+            }
+            "-enclib" {
+                Write-Host " [Maven] 僅 enclib"
+                Push-Location (Join-Path $RepoPath "enclib\fep-enclib")
+                & $Mvn clean install -pl enclib -am -f pom.xml -B
+                Test-StepResult "mvn enclib"
+                Pop-Location
+                $collectJar = $false
+            }
+            "-safeaa" {
+                Write-Host " [Maven] 僅 safeaa"
+                Push-Location (Join-Path $RepoPath "safeaa")
+                & $Mvn clean install -f pom.xml -B
+                Test-StepResult "mvn safeaa"
+                Pop-Location
+                $collectJar = $false
+            }
+            default {
+                Write-Host " [Maven] 全 build（僅 JAR）"
+                Push-Location $fepPath
+                & $Mvn clean install @assemblyArgs -f pom.xml -B
+                Test-StepResult "mvn clean install"
+                Pop-Location
+            }
+        }
+    }
+
+    if ($collectJar) {
+        $batchDir = Join-Path $RepoPath "source\fep-assembly-batch-task"
+        if (Test-Path $batchDir) {
+            Get-ChildItem $batchDir -Filter "fep-batch-task*.jar" -ErrorAction SilentlyContinue |
+                ForEach-Object {
+                    Copy-Item $_.FullName $OutputPath -Force
+                    Write-Host " [Output] 收集 $($_.Name)"
+                }
+        }
+    }
+
+    if ($collectWar) {
+        $warFile = Join-Path $RepoPath "source\fep-war\fep-web.war"
+        if (Test-Path $warFile) {
+            Copy-Item $warFile $OutputPath -Force
+            Write-Host " [Output] 收集 fep-web.war"
+        } else {
+            Write-Host " ⚠️  找不到 WAR：$warFile" -ForegroundColor Yellow
+        }
+    }
+}
+
+# =============================================
 # [6/8] build folder 清空（可 skip，skip 則自動 skip [7] docker build）
 # =============================================
 $skipBuild = $false
@@ -393,40 +505,66 @@ if ($skipBuild) {
     $env:BUILD_MODULES = $BuildModules
     $env:BRANCH        = $GitBranch
 
-    # [Windows 限定] Maven cache volume 初始化檢查（僅在 volume 不存在時觸發）
+    # Windows：手動選擇 Native / Docker 建置方式
+    $useNative      = $false
+    $NativeMvnCmd   = "mvn"
+    $NativeJavaHome = $EnvVars["JAVA_HOME"]
+
     if ($IsWindows) {
-        $m2Path = $EnvVars["M2_PATH"]
-        if ($m2Path -and -not ($m2Path -match '[/\\]')) {
-            $null = docker volume inspect $m2Path 2>&1
-            if ($LASTEXITCODE -ne 0) {
-                $localM2 = "C:\Users\$UserName\.m2"
-                Write-Host ""
-                Write-Host " ⚠️  Maven cache volume '$m2Path' 尚未建立（首次使用）" -ForegroundColor Yellow
-                if (Test-Path $localM2) {
-                    Write-Host " 偵測到本機 .m2：$localM2"
-                    $initChoice = Read-Host " 是否將現有 .m2 複製進 volume？（Y/Enter=是，N=略過，略過則 Maven 需重新下載 ~2.5GB）"
-                    if ($initChoice -inotmatch '^[Nn]') {
-                        Write-Host " 複製中，請稍候（約 1~2 分鐘）..."
-                        docker run --rm -v "${m2Path}:/target" -v "${localM2}:/source:ro" alpine sh -c "cp -a /source/. /target/"
-                        if ($LASTEXITCODE -eq 0) {
-                            Write-Host " ✅ Maven cache 已複製至 volume：$m2Path" -ForegroundColor Green
+        Write-Host ""
+        Write-Host " [N] Native build（直接呼叫 mvn，速度較快）"
+        Write-Host " [D] Docker container build"
+        $platformChoice = Read-Host " 請選擇 [N/D]（預設 N）"
+        $useNative = $platformChoice -inotmatch '^[Dd]'
+    }
+
+    if ($useNative) {
+        Write-Host ""
+        Write-Host " 🔨 Native build 開始"
+        Write-Host "------------------------------------------------"
+        Invoke-NativeBuild `
+            -Mvn         $NativeMvnCmd `
+            -JavaHome    $NativeJavaHome `
+            -RepoPath    $RepoPath `
+            -OutputPath  $OutputPath `
+            -BuildMode   $BuildMode `
+            -BuildModules $BuildModules
+    } else {
+        # [Windows 限定] Maven cache volume 初始化檢查（僅在 volume 不存在時觸發）
+        if ($IsWindows) {
+            $m2Path = $EnvVars["M2_PATH"]
+            if ($m2Path -and -not ($m2Path -match '[/\\]')) {
+                $null = docker volume inspect $m2Path 2>&1
+                if ($LASTEXITCODE -ne 0) {
+                    $localM2 = "C:\Users\$UserName\.m2"
+                    Write-Host ""
+                    Write-Host " ⚠️  Maven cache volume '$m2Path' 尚未建立（首次使用）" -ForegroundColor Yellow
+                    if (Test-Path $localM2) {
+                        Write-Host " 偵測到本機 .m2：$localM2"
+                        $initChoice = Read-Host " 是否將現有 .m2 複製進 volume？（Y/Enter=是，N=略過，略過則 Maven 需重新下載 ~2.5GB）"
+                        if ($initChoice -inotmatch '^[Nn]') {
+                            Write-Host " 複製中，請稍候（約 1~2 分鐘）..."
+                            docker run --rm -v "${m2Path}:/target" -v "${localM2}:/source:ro" alpine sh -c "cp -a /source/. /target/"
+                            if ($LASTEXITCODE -eq 0) {
+                                Write-Host " ✅ Maven cache 已複製至 volume：$m2Path" -ForegroundColor Green
+                            } else {
+                                Write-Host " ❌ 複製失敗，後續 build 將從網路重新下載依賴" -ForegroundColor Red
+                            }
                         } else {
-                            Write-Host " ❌ 複製失敗，後續 build 將從網路重新下載依賴" -ForegroundColor Red
+                            Write-Host " ⏭️  略過複製，Maven 將在 build 時從網路下載依賴" -ForegroundColor Yellow
                         }
                     } else {
-                        Write-Host " ⏭️  略過複製，Maven 將在 build 時從網路下載依賴" -ForegroundColor Yellow
+                        Write-Host " ℹ️  未找到本機 .m2（$localM2），Maven 將在 build 時自動下載依賴"
                     }
-                } else {
-                    Write-Host " ℹ️  未找到本機 .m2（$localM2），Maven 將在 build 時自動下載依賴"
                 }
             }
         }
-    }
 
-    Set-Location $DockerBuildDir
-    docker compose --env-file $EnvFileName run --rm fep-builder
-    Test-StepResult "Docker build"
-    Set-Location $RepoPath
+        Set-Location $DockerBuildDir
+        docker compose --env-file $EnvFileName run --rm fep-builder
+        Test-StepResult "Docker build"
+        Set-Location $RepoPath
+    }
 }
 
 # =============================================
