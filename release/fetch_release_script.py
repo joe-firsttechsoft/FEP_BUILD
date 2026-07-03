@@ -78,6 +78,7 @@ SHEET_NAME = "SIT UAT待過版"
 # branch type → A 欄搜尋關鍵字（list，依序讀取後合併寫入）
 BRANCH_KEYWORD = {
     "1-3_SIT": ["P1-2 SIT", "P1-3 SIT"],
+    "2-1_SIT": ["P2-1 SIT"],  # TODO: 確認 Excel A 欄實際關鍵字
 }
 COL_V = 21  # V 欄（0-indexed）
 
@@ -110,8 +111,8 @@ def read_script(file_bytes, branch_type):
     return "\n".join(scripts)
 
 def main():
-    if len(sys.argv) < 2 or sys.argv[1] not in ("1-3_SIT",):
-        print("用法：python3 fetch_release_script.py 1-3_SIT")
+    if len(sys.argv) < 2 or sys.argv[1] not in ("1-3_SIT", "2-1_SIT"):
+        print("用法：python3 fetch_release_script.py 1-3_SIT|2-1_SIT")
         sys.exit(1)
 
     branch_type = sys.argv[1]
