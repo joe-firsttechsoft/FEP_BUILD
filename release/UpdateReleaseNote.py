@@ -139,12 +139,12 @@ def extract_release_info(fileList, base_path):
 
 def get_max_item_number(text):
     """
-    從文字中找出最大的編號項次（格式：'數字. '）。
-    例如 '1. aaa\n2. bbb' → 回傳 2
+    從文字中找出最大的序號項次。
+    行首 數字. 一律視為序號（有無空格皆可）。
     """
     max_num = 0
     for line in text.split('\n'):
-        m = re.match(r'^(\d+)\.\s+', line)
+        m = re.match(r'^(\d+)\.', line)
         if m:
             num = int(m.group(1))
             if num > max_num:
@@ -153,17 +153,31 @@ def get_max_item_number(text):
 
 def renumber_items(content, start=1):
     """
-    將內容中所有 '數字. 文字' 格式的行依序重新編號，從 start 開始。
-    非此格式的行保持原樣。
+    將內容中的序號行依序重新編號，從 start 開始。
+    行首 數字. 一律視為序號（有無空格皆可），輸出統一補空格。
     """
     lines = content.split('\n')
     counter = start
     result = []
     for line in lines:
-        m = re.match(r'^(\d+)\.\s+(.*)', line)
+        m = re.match(r'^(\d+)\.\s*(.*)', line)
         if m:
             result.append(f"{counter}. {m.group(2)}")
             counter += 1
+        else:
+            result.append(line)
+    return '\n'.join(result)
+
+def normalize_items(content):
+    """
+    將未帶序號的非空行補上佔位序號，讓 renumber_items 能統一重新編號。
+    行首 數字. 一律視為已有序號（有無空格皆可），不重複補加。
+    """
+    lines = content.split('\n')
+    result = []
+    for line in lines:
+        if line.strip() and not re.match(r'^\d+\.', line):
+            result.append(f"1. {line}")
         else:
             result.append(line)
     return '\n'.join(result)
@@ -227,7 +241,7 @@ def update_release_notes(base_path, fileList, LastReleaseDate, LastReleaseVer, L
         # 插入邏輯
         if release_date and release_ver:
             # 換日：插入在第一行後，項次從 1 開始
-            numbered_content = renumber_items(newContent, start=1)
+            numbered_content = renumber_items(normalize_items(newContent), start=1)
             updated_lines = []
             updated_lines.append(lines[0])
             updated_lines.append(release_date)
@@ -242,7 +256,7 @@ def update_release_notes(base_path, fileList, LastReleaseDate, LastReleaseVer, L
                     break
                 today_lines.append(line)
             last_num = get_max_item_number('\n'.join(today_lines))
-            numbered_content = renumber_items(newContent, start=last_num + 1)
+            numbered_content = renumber_items(normalize_items(newContent), start=last_num + 1)
 
             updated_lines = []
             inserted = False
