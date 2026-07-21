@@ -432,6 +432,7 @@ function Invoke-NativeBuild {
 # =============================================
 $skipBuild = $false
 $AutoModules = @()  # 初始化，避免 skip [7] 時 step 8 引用未定義變數
+$UsePartialBuildFilter = $false  # 僅在 [7/8] 實際選擇「B 依 release note 部分 build」時才為 true，[8/8] 據此決定是否篩選 bin 套件
 Write-Host ""
 Write-Host "------------------------------------------------"
 Write-Host " 輸出路徑：$OutputPath"
@@ -499,6 +500,7 @@ if ($skipBuild) {
         if ($buildChoice -ieq "B" -and $AutoModules.Count -gt 0) {
             $BuildModules = $AutoModules -join ","
             Write-Host " ✅ 部分 build 模組：$BuildModules"
+            $UsePartialBuildFilter = $true
         } else {
             $BuildMode = Select-BuildMode -Current $BuildMode
         }
@@ -580,8 +582,8 @@ Write-Host "------------------------------------------------"
 
 $AllBinTarFiles = Get-ChildItem $OutputPath -Filter "*bin*.tar.gz" -ErrorAction SilentlyContinue | Sort-Object Name
 
-# 僅在本次有重新下載 release note 時才依模組篩選；略過下載則一律顯示全部
-if ($AutoModules.Count -gt 0 -and $step3Choice -ine "S") {
+# 僅在 [7/8] 實際選擇「B 依 release note 部分 build」時才依模組篩選；選 A 全 build 則一律顯示全部
+if ($UsePartialBuildFilter) {
     $BinTarFiles = $AllBinTarFiles | Where-Object {
         $name = $_.Name
         $AutoModules | Where-Object { $name -like "$_*" }
