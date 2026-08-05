@@ -87,8 +87,8 @@ cd release
 ## 流程說明（8 步驟）
 
 ```
-[1/8] git checkout          → 切換到目標 branch
-[2/8] git reset / pull      → 更新最新程式碼（可略過）
+[1/8] git reset             → 清空未 commit 變更（顯示 diff 後可選擇是否執行，避免下一步 checkout 失敗）
+[2/8] git checkout / pull   → 切換到目標 branch，並更新最新程式碼（pull 可略過）
 [3/8] SharePoint → txt      → 從 SharePoint Excel 下載 release note script（UAT 略過）
 [4/8] 更新 release note     → 將 script 寫入原始碼（UAT 略過）
 [5/8] git commit            → commit release note 變更（UAT 略過）

@@ -117,23 +117,10 @@ function Test-StepResult {
 }
 
 # =============================================
-# [1/8] git checkout（僅在非目標 branch 時執行）
+# [1/8] git reset --hard（清空未 commit 變更，避免下一步 checkout 失敗）
 # =============================================
 Write-Host ""
-$currentBranch = (git rev-parse --abbrev-ref HEAD 2>$null).Trim()
-if ($currentBranch -ne $GitBranch) {
-    Write-Host "[1/8] git checkout $GitBranch（目前：$currentBranch）"
-    git checkout $GitBranch
-    Test-StepResult "git checkout $GitBranch"
-} else {
-    Write-Host "[1/8] 已在 $GitBranch，略過 checkout"
-}
-
-# =============================================
-# [2/8] git reset --hard + git pull（可個別 skip）
-# =============================================
-Write-Host ""
-Write-Host "[2/8] git reset / pull"
+Write-Host "[1/8] git reset"
 Write-Host "------------------------------------------------"
 
 # 顯示未 commit 的差異
@@ -143,21 +130,39 @@ if ($diffStat -or $statusOut) {
     Write-Host " 📋 目前未 commit 的變更："
     if ($statusOut) { $statusOut | ForEach-Object { Write-Host "   $_" } }
     if ($diffStat)  { $diffStat  | ForEach-Object { Write-Host "   $_" } }
+    Write-Host "------------------------------------------------"
+    $resetChoice = Read-Host " git reset --hard  [S] 略過 / [Enter] 執行（將捨棄以上變更）"
+    if ($resetChoice -ieq "S") {
+        Write-Host " ⏭️  略過 git reset（未 commit 變更可能導致下一步 checkout 失敗）" -ForegroundColor Yellow
+    } else {
+        Write-Host " git reset --hard HEAD"
+        git reset --hard HEAD
+        Test-StepResult "git reset --hard HEAD"
+    }
 } else {
-    Write-Host " ✅ 目前無未 commit 的變更"
+    Write-Host " ✅ 目前無未 commit 的變更，略過 reset"
 }
 
-Write-Host "------------------------------------------------"
-$resetPullChoice = Read-Host " git reset --hard + pull  [S] 略過 / [Enter] 執行"
+# =============================================
+# [2/8] git checkout + git pull（僅在非目標 branch 時 checkout；pull 可 skip）
+# =============================================
+Write-Host ""
+$currentBranch = (git rev-parse --abbrev-ref HEAD 2>$null).Trim()
+if ($currentBranch -ne $GitBranch) {
+    Write-Host "[2/8] git checkout $GitBranch（目前：$currentBranch）"
+    git checkout $GitBranch
+    Test-StepResult "git checkout $GitBranch"
+} else {
+    Write-Host "[2/8] 已在 $GitBranch，略過 checkout"
+}
 
-if ($resetPullChoice -ieq "S") {
-    Write-Host " ⏭️  略過 git reset + pull"
+$pullChoice = Read-Host " git pull origin $GitBranch  [S] 略過 / [Enter] 執行"
+if ($pullChoice -ieq "S") {
+    Write-Host " ⏭️  略過 git pull"
     if ($EnvVars["GIT_PULL"] -ine "true") {
         Write-Host " ⚠️  警告：略過 pull 且 container GIT_PULL 非 true，docker build 可能使用舊版程式碼" -ForegroundColor Yellow
     }
 } else {
-    Write-Host " git reset --hard HEAD"
-    git reset --hard HEAD
     Write-Host " git pull origin $GitBranch"
     git pull origin $GitBranch
     Test-StepResult "git pull origin $GitBranch"
