@@ -117,10 +117,10 @@ function Test-StepResult {
 }
 
 # =============================================
-# [1/8] git reset --hard（清空未 commit 變更，避免下一步 checkout 失敗）
+# [1/7] git reset --hard（清空未 commit 變更，避免下一步 checkout 失敗）
 # =============================================
 Write-Host ""
-Write-Host "[1/8] git reset"
+Write-Host "[1/7] git reset"
 Write-Host "------------------------------------------------"
 
 # 顯示未 commit 的差異
@@ -144,16 +144,16 @@ if ($diffStat -or $statusOut) {
 }
 
 # =============================================
-# [2/8] git checkout + git pull（僅在非目標 branch 時 checkout；pull 可 skip）
+# [2/7] git checkout + git pull（僅在非目標 branch 時 checkout；pull 可 skip）
 # =============================================
 Write-Host ""
 $currentBranch = (git rev-parse --abbrev-ref HEAD 2>$null).Trim()
 if ($currentBranch -ne $GitBranch) {
-    Write-Host "[2/8] git checkout $GitBranch（目前：$currentBranch）"
+    Write-Host "[2/7] git checkout $GitBranch（目前：$currentBranch）"
     git checkout $GitBranch
     Test-StepResult "git checkout $GitBranch"
 } else {
-    Write-Host "[2/8] 已在 $GitBranch，略過 checkout"
+    Write-Host "[2/7] 已在 $GitBranch，略過 checkout"
 }
 
 $pullChoice = Read-Host " git pull origin $GitBranch  [S] 略過 / [Enter] 執行"
@@ -168,20 +168,20 @@ if ($pullChoice -ieq "S") {
     Test-StepResult "git pull origin $GitBranch"
 }
 
-# 初始化（UAT 模式略過 [3-5/8]，確保後續步驟變數已定義）
+# 初始化（UAT 模式略過 [3-5/7]，確保後續步驟變數已定義）
 $step3Choice = "S"
 $skipCommit  = $true
 
 if ($BranchType -eq "1-3_UAT") {
     Write-Host ""
-    Write-Host "[3-5/8] UAT 模式 → 略過 SharePoint 讀取 / release note 更新 / git commit"
+    Write-Host "[3-5/7] UAT 模式 → 略過 SharePoint 讀取 / release note 更新 / git commit"
 } else {
     # =============================================
-    # [3/8] SharePoint 讀取 → txt（可 skip）
+    # [3/7] SharePoint 讀取 → txt（可 skip）
     # =============================================
     Write-Host ""
     Write-Host "------------------------------------------------"
-    $step3Choice = Read-Host "[3/8] SharePoint 讀取 → txt  [S] 略過 / [Enter] 執行"
+    $step3Choice = Read-Host "[3/7] SharePoint 讀取 → txt  [S] 略過 / [Enter] 執行"
     if ($step3Choice -ieq "S") {
         if (-not (Test-Path $env:RELEASE_NOTE_INPUT)) {
             Write-Host " ❌ 錯誤：略過下載但 txt 不存在：$($env:RELEASE_NOTE_INPUT)" -ForegroundColor Red
@@ -206,15 +206,15 @@ if ($BranchType -eq "1-3_UAT") {
     }
 
     # =============================================
-    # [4/8] txt → release note（可 skip，skip 則自動 skip [5]）
+    # [4/7] txt → release note（可 skip，skip 則自動 skip [5]）
     # =============================================
     $skipCommit = $false
     Write-Host ""
     Write-Host "------------------------------------------------"
-    $step4Choice = Read-Host "[4/8] 更新 release note  [S] 略過（連帶略過 git commit）/ [Enter] 執行"
+    $step4Choice = Read-Host "[4/7] 更新 release note  [S] 略過（連帶略過 git commit）/ [Enter] 執行"
     if ($step4Choice -ieq "S") {
         $skipCommit = $true
-        Write-Host " ⏭️  略過更新 release note，自動略過 [5/8] git commit"
+        Write-Host " ⏭️  略過更新 release note，自動略過 [5/7] git commit"
     } else {
         & $Python (Join-Path $ScriptDir "UpdateReleaseNote.py")
         Test-StepResult "更新 release note（UpdateReleaseNote.py）"
@@ -229,14 +229,14 @@ if ($BranchType -eq "1-3_UAT") {
     }
 
     # =============================================
-    # [5/8] git commit release note（[4] skip 則自動 skip，否則可 skip）
+    # [5/7] git commit release note（[4] skip 則自動 skip，否則可 skip）
     # =============================================
     Write-Host ""
     if ($skipCommit) {
-        Write-Host "[5/8] git commit → [4/8] 已略過，自動略過"
+        Write-Host "[5/7] git commit → [4/7] 已略過，自動略過"
     } else {
         Write-Host "------------------------------------------------"
-        $step5Choice = Read-Host "[5/8] git commit release note  [S] 略過 / [Enter] 執行"
+        $step5Choice = Read-Host "[5/7] git commit release note  [S] 略過 / [Enter] 執行"
         if ($step5Choice -ieq "S") {
             Write-Host " ⏭️  略過 git commit"
         } else {
@@ -433,36 +433,23 @@ function Invoke-NativeBuild {
 }
 
 # =============================================
-# [6/8] build folder 清空（可 skip，skip 則自動 skip [7] docker build）
+# [6/7] Maven build（可 skip，連帶 skip [7/7] 整理）
 # =============================================
 $skipBuild = $false
-$AutoModules = @()  # 初始化，避免 skip [7] 時 step 8 引用未定義變數
-$UsePartialBuildFilter = $false  # 僅在 [7/8] 實際選擇「B 依 release note 部分 build」時才為 true，[8/8] 據此決定是否篩選 bin 套件
+$AutoModules = @()
 Write-Host ""
 Write-Host "------------------------------------------------"
 Write-Host " 輸出路徑：$OutputPath"
 Write-Host "------------------------------------------------"
-$step6Choice = Read-Host "[6/8] 清空輸出資料夾  [S] 略過（連帶略過 docker build）/ [Enter] 執行"
+$step6Choice = Read-Host "[6/7] Maven build  [S] 略過（連帶略過 [7/7] 整理）/ [Enter] 執行"
 if ($step6Choice -ieq "S") {
     $skipBuild = $true
-    Write-Host " ⏭️  略過清空資料夾，自動略過 [7/8] docker build"
-    $tarCount = (Get-ChildItem $OutputPath -Filter "*.tar.gz" -ErrorAction SilentlyContinue | Measure-Object).Count
-    if ($tarCount -eq 0) {
-        Write-Host " ⚠️  警告：輸出資料夾目前無 tar.gz，[8/8] 解壓縮步驟可能無檔可處理" -ForegroundColor Yellow
-    }
-} else {
-    if (Test-Path $OutputPath) {
-        Write-Host " 清空輸出資料夾：$OutputPath"
-        Get-ChildItem $OutputPath -Force | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-    }
+    Write-Host " ⏭️  略過 build，自動略過 [7/7] 整理"
 }
 
-# =============================================
-# [7/8] Docker build（[6] skip 則自動 skip）
-# =============================================
 if ($skipBuild) {
     Write-Host ""
-    Write-Host "[7/8] docker build → [6/8] 已略過，自動略過"
+    Write-Host "[6/7] build → 已略過"
 } else {
     $AutoModules  = Get-MavenModules -TxtPath $env:RELEASE_NOTE_INPUT
     $BuildMode    = $EnvVars["BUILD_MODE"]
@@ -471,7 +458,7 @@ if ($skipBuild) {
     $isCmdlineOnly = ($AutoModules | Where-Object { $_ -notmatch "cmdline" }).Count -eq 0 -and $AutoModules.Count -gt 0
 
     Write-Host ""
-    Write-Host "[7/8] Docker 包版"
+    Write-Host "[6/7] Maven 包版"
     Write-Host "------------------------------------------------"
     Write-Host " Branch   : $GitBranch（由本 script 指定，覆蓋 .env）"
     Write-Host " GIT_PULL : $($EnvVars['GIT_PULL'])"
@@ -505,7 +492,6 @@ if ($skipBuild) {
         if ($buildChoice -ieq "B" -and $AutoModules.Count -gt 0) {
             $BuildModules = $AutoModules -join ","
             Write-Host " ✅ 部分 build 模組：$BuildModules"
-            $UsePartialBuildFilter = $true
         } else {
             $BuildMode = Select-BuildMode -Current $BuildMode
         }
@@ -578,78 +564,122 @@ if ($skipBuild) {
 }
 
 # =============================================
-# [8/8] 搬移並解壓
+# [7/7] 整理產出物（[6/7] skip 則自動 skip）
 # =============================================
 Write-Host ""
 Write-Host "------------------------------------------------"
-Write-Host " 📦 [8/8] 搬移並解壓"
+Write-Host " 📦 [7/7] 整理產出物"
 Write-Host "------------------------------------------------"
 
-$AllBinTarFiles = Get-ChildItem $OutputPath -Filter "*bin*.tar.gz" -ErrorAction SilentlyContinue | Sort-Object Name
+$DeployPath = $OutputPath  # 若 skip build 則 OpenPath 指向 OutputPath
 
-# 僅在 [7/8] 實際選擇「B 依 release note 部分 build」時才依模組篩選；選 A 全 build 則一律顯示全部
-if ($UsePartialBuildFilter) {
-    $BinTarFiles = $AllBinTarFiles | Where-Object {
-        $name = $_.Name
-        $AutoModules | Where-Object { $name -like "$_*" }
-    }
-    if ($BinTarFiles.Count -lt $AllBinTarFiles.Count) {
-        Write-Host " 依 release note 篩選後的 bin 套件（共 $($AllBinTarFiles.Count) 個，篩選後 $($BinTarFiles.Count) 個）："
-    } else {
-        Write-Host " bin 套件："
-    }
+if ($skipBuild) {
+    Write-Host "[7/7] 整理產出物 → [6/7] 已略過，自動略過"
 } else {
-    $BinTarFiles = $AllBinTarFiles
-    Write-Host " bin 套件（顯示全部）："
-}
+    $step7Choice = Read-Host " [S] 略過整理 / [Enter] 執行"
+    if ($step7Choice -ieq "S") {
+        Write-Host " ⏭️  略過整理"
+    } else {
+        # 建立時間戳資料夾：build-output/<Branch>/yyyyMMddHHmm/
+        $timestamp      = Get-Date -Format "yyyyMMddHHmm"
+        $BuildOutputDir = Join-Path (Split-Path $OutputPath -Parent) "build-output"
+        $DeployPath     = Join-Path $BuildOutputDir $GitBranch $timestamp
+        $FepAppPath     = Join-Path $DeployPath "fep-app"
+        New-Item -ItemType Directory -Path $FepAppPath -Force | Out-Null
+        Write-Host " 目的資料夾：$DeployPath"
+        Write-Host ""
 
-if ($BinTarFiles -and $BinTarFiles.Count -gt 0) {
-    $BinTarFiles | ForEach-Object { Write-Host "   $($_.Name)" }
-
-    # 解壓前清除 output 目錄（含子資料夾）內所有 ._ 檔案
-    $dotUnderscoreFiles = Get-ChildItem $OutputPath -Filter "._*" -Recurse -Force -ErrorAction SilentlyContinue
-    if ($dotUnderscoreFiles) {
-        $dotUnderscoreFiles | Remove-Item -Force -ErrorAction SilentlyContinue
-        Write-Host " 🧹 已清除 $($dotUnderscoreFiles.Count) 個 ._ 檔案"
-    }
-
-    Write-Host ""
-    $extractChoice = Read-Host " 是否將 bin 套件解壓到 bin 子目錄？[Y/N]（預設 Y）"
-
-    if ($extractChoice -ine "N") {
-        $BinOutputPath = Join-Path $OutputPath "bin"
-        if (Test-Path $BinOutputPath) {
-            Get-ChildItem $BinOutputPath -Force -Recurse |
-                Sort-Object FullName -Descending |
-                Remove-Item -Force -ErrorAction SilentlyContinue
-            Remove-Item $BinOutputPath -Force -ErrorAction SilentlyContinue
+        # 載入模組清單（fetch_release_script.py 產出的 BuildModuleData.json）
+        $Services  = @()
+        $BatchJars = @()
+        $moduleDataFile = Join-Path $ScriptDir "BuildModuleData.json"
+        if (Test-Path $moduleDataFile) {
+            $moduleData = Get-Content $moduleDataFile -Raw | ConvertFrom-Json
+            $Services   = @($moduleData.services)
+            $BatchJars  = @($moduleData.batch_jars)
+            Write-Host " 服務清單（H 欄）：$($Services -join ', ')"
+            Write-Host " Batch JAR（I 欄）：$($BatchJars -join ', ')"
+        } else {
+            Write-Host " ⚠️  找不到 BuildModuleData.json，將解壓全部 bin tar.gz" -ForegroundColor Yellow
         }
-        New-Item -ItemType Directory -Path $BinOutputPath | Out-Null
+        Write-Host ""
 
-        foreach ($tar in $BinTarFiles) {
-            Write-Host " 解壓縮：$($tar.Name)"
-            tar -xzf $tar.FullName -C $BinOutputPath
+        if ($Services.Count -gt 0) {
+            # 依服務清單整理
+            foreach ($service in $Services) {
+                if ($service -eq "fep-web") {
+                    # WAR：複製到 fep-app/
+                    $warFile = Get-ChildItem $OutputPath -Filter "fep-web.war" -ErrorAction SilentlyContinue | Select-Object -First 1
+                    if ($warFile) {
+                        Copy-Item $warFile.FullName $FepAppPath -Force
+                        Write-Host " [war]  複製：$($warFile.Name) → fep-app/"
+                    } else {
+                        Write-Host " ⚠️  找不到 fep-web.war" -ForegroundColor Yellow
+                    }
+                } elseif ($service -eq "fep-batch-task") {
+                    # fep-batch-task：無 tar.gz，僅複製 I 欄 fep-batch-task- 開頭的 jar 到 fep-app/
+                    foreach ($jar in ($BatchJars | Where-Object { $_ -like 'fep-batch-task-*' })) {
+                        $jarFile = Get-ChildItem $OutputPath -Filter $jar -ErrorAction SilentlyContinue | Select-Object -First 1
+                        if ($jarFile) {
+                            Copy-Item $jarFile.FullName $FepAppPath -Force
+                            Write-Host " [jar]  複製：$($jarFile.Name) → fep-app/"
+                        } else {
+                            Write-Host " ⚠️  找不到 jar：$jar" -ForegroundColor Yellow
+                        }
+                    }
+                } else {
+                    # 一般服務：解壓 bin tar.gz
+                    # Pattern 1: {service}-bin*.tar.gz（如 fep-batch-cmdline → fep-batch-cmdline-bin.tar.gz）
+                    $tarFiles = Get-ChildItem $OutputPath -Filter "$service-bin*.tar.gz" -ErrorAction SilentlyContinue | Sort-Object Name
+                    if (-not $tarFiles) {
+                        # Pattern 2: {base}-bin-{suffix}*.tar.gz（如 fep-server-atm → fep-server-bin-atm.tar.gz）
+                        $lastDash = $service.LastIndexOf('-')
+                        if ($lastDash -gt 0) {
+                            $altFilter = "$($service.Substring(0, $lastDash))-bin-$($service.Substring($lastDash + 1))*.tar.gz"
+                            $tarFiles = Get-ChildItem $OutputPath -Filter $altFilter -ErrorAction SilentlyContinue | Sort-Object Name
+                        }
+                    }
+                    if ($tarFiles) {
+                        foreach ($tar in $tarFiles) {
+                            Write-Host " [tar]  解壓縮：$($tar.Name)"
+                            tar -xzf $tar.FullName -C $DeployPath
+                        }
+                    } else {
+                        Write-Host " ⚠️  找不到 $service 的 bin tar.gz" -ForegroundColor Yellow
+                    }
+                }
+            }
+        } else {
+            # 無模組清單（UAT 或 skip step3）：解壓全部 bin tar.gz
+            $allTars = Get-ChildItem $OutputPath -Filter "*-bin*.tar.gz" -ErrorAction SilentlyContinue | Sort-Object Name
+            if ($allTars) {
+                foreach ($tar in $allTars) {
+                    Write-Host " [tar]  解壓縮：$($tar.Name)"
+                    tar -xzf $tar.FullName -C $DeployPath
+                }
+            } else {
+                Write-Host " ⚠️  OutputPath 中找不到任何 bin tar.gz" -ForegroundColor Yellow
+            }
         }
 
-        # 清除 macOS 在 exFAT 上產生的 ._ resource fork 檔案
-        Get-ChildItem $BinOutputPath -Filter "._*" -Recurse -Force -ErrorAction SilentlyContinue |
+        # 清除 macOS 產生的 ._ resource fork 檔案
+        Get-ChildItem $DeployPath -Filter "._*" -Recurse -Force -ErrorAction SilentlyContinue |
             Remove-Item -Force -ErrorAction SilentlyContinue
+        Write-Host ""
         Write-Host " 🧹 已清除 ._ 隱藏檔案"
-    } else {
-        Write-Host " ⏭️  略過解壓縮"
     }
-} else {
-    Write-Host " ⚠️  未找到 bin tar.gz 檔案，略過解壓縮"
 }
 
-$BinOutputPath = Join-Path $OutputPath "bin"
-$OpenPath = if (Test-Path $BinOutputPath) { $BinOutputPath } else { $OutputPath }
+$OpenPath = if (Test-Path $DeployPath) { $DeployPath } else { $OutputPath }
 
 Write-Host ""
 Write-Host " 📂 產出物列表："
-Get-ChildItem $OpenPath | ForEach-Object { Write-Host "   $($_.Name)" }
-
-Invoke-Item $OpenPath
+if (Test-Path $OpenPath) {
+    Get-ChildItem $OpenPath | ForEach-Object { Write-Host "   $($_.Name)" }
+    Invoke-Item $OpenPath
+} else {
+    Write-Host "   （資料夾不存在）"
+}
 Write-Host ""
 Write-Host "------------------------------------------------"
 Write-Host " ⚠️  請確認產出物是否正確"

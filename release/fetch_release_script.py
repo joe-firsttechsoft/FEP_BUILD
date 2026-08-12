@@ -1,6 +1,7 @@
 import requests
 import pandas as pd
 import io
+import json
 import os
 import sys
 import re
@@ -78,9 +79,77 @@ SHEET_NAME = "SIT UAT待過版"
 # branch type → A 欄搜尋關鍵字（list，依序讀取後合併寫入）
 BRANCH_KEYWORD = {
     "1-3_SIT": ["P1-2 SIT", "P1-3 SIT"],
-    "2-1_SIT": ["P2-1 SIT"],  # TODO: 確認 Excel A 欄實際關鍵字
+    "2-1_SIT": ["P2-1 SIT"],
 }
 COL_V = 21  # V 欄（0-indexed）
+COL_H = 7   # H 欄（0-indexed）— 服務/模組名稱
+COL_I = 8   # I 欄（0-indexed）— jar 檔名
+
+# branch type → (SIT 起始關鍵字, UAT 結束關鍵字) 的列範圍定義
+# 取得範圍：A 欄 == SIT 關鍵字 的列（含）→ A 欄 == UAT 關鍵字 的列（不含）
+BRANCH_MODULE_RANGES = {
+    "1-3_SIT": [
+        ("P1-2 SIT", "P1-2 UAT"),
+        ("P1-3 SIT", "P1-3 UAT"),
+    ],
+    "2-1_SIT": [
+        ("P2-1 SIT", "P2-1 UAT"),
+    ],
+}
+
+def read_module_data(file_bytes, branch_type):
+    """
+    從 SIT UAT待過版 sheet 讀取 H 欄（服務）和 I 欄（jar 檔名）。
+    依分支對應的列範圍（SIT 起始列含、UAT 結束列不含）篩選後去重回傳。
+    """
+    if branch_type not in BRANCH_MODULE_RANGES:
+        return {"services": [], "batch_jars": []}
+
+    df = pd.read_excel(io.BytesIO(file_bytes), sheet_name=SHEET_NAME, header=None)
+    col_a = df.iloc[:, 0].astype(str).str.strip()
+
+    services_raw = []
+    batch_jars_raw = []
+
+    for start_kw, end_kw in BRANCH_MODULE_RANGES[branch_type]:
+        start_matches = col_a[col_a == start_kw].index.tolist()
+        end_matches   = col_a[col_a == end_kw].index.tolist()
+
+        if not start_matches:
+            print(f"⚠️  找不到「{start_kw}」列，略過此範圍")
+            continue
+        start_row = start_matches[0]
+
+        # 取第一個在 start_row 之後的 end_kw 列
+        end_candidates = [r for r in end_matches if r > start_row]
+        if not end_candidates:
+            print(f"⚠️  找不到「{end_kw}」在「{start_kw}」之後的列，略過此範圍")
+            continue
+        end_row = end_candidates[0]
+
+        print(f"    [{start_kw}] 第 {start_row + 1} 列 → [{end_kw}] 第 {end_row + 1} 列（不含）")
+
+        for idx in range(start_row, end_row):
+            h_val = str(df.iloc[idx, COL_H]).strip()
+            i_val = str(df.iloc[idx, COL_I]).strip()
+            if h_val and h_val.lower() != 'nan':
+                for part in h_val.splitlines():
+                    part = part.strip().lower()
+                    if part:
+                        services_raw.append(part)
+            if i_val and i_val.lower() != 'nan':
+                for part in i_val.splitlines():
+                    part = part.strip()
+                    if part:
+                        batch_jars_raw.append(part)
+
+    # 去重（保留順序）
+    seen = set()
+    services  = [s for s in services_raw  if not (s in seen or seen.add(s))]
+    seen = set()
+    batch_jars = [j for j in batch_jars_raw if not (j in seen or seen.add(j))]
+
+    return {"services": services, "batch_jars": batch_jars}
 
 def fetch_excel():
     """從 SharePoint 下載 Excel"""
@@ -144,9 +213,19 @@ def main():
 
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write(script)
-
     print(f"✅ 已寫入 {output_file}：")
     print(script)
+
+    # 讀取 H / I 欄模組資料並輸出 BuildModuleData.json
+    print(f"\n    讀取 {branch_type} 模組清單（H / I 欄）...")
+    module_data = read_module_data(file_bytes, branch_type)
+    print(f"    服務：{module_data['services']}")
+    print(f"    Batch JAR：{module_data['batch_jars']}")
+
+    module_output_file = os.path.join(os.path.dirname(os.path.abspath(output_file)), "BuildModuleData.json")
+    with open(module_output_file, 'w', encoding='utf-8') as f:
+        json.dump(module_data, f, ensure_ascii=False, indent=2)
+    print(f"✅ 已寫入 {module_output_file}")
 
 if __name__ == "__main__":
     main()
