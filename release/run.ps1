@@ -172,7 +172,7 @@ if ($pullChoice -ieq "S") {
 $step3Choice = "S"
 $skipCommit  = $true
 
-if ($BranchType -eq "1-3_UAT") {
+if ($BranchType -like '*_UAT') {
     Write-Host ""
     Write-Host "[3-5/7] UAT 模式 → 略過 SharePoint 讀取 / release note 更新 / git commit"
 } else {
@@ -465,7 +465,7 @@ if ($skipBuild) {
     Write-Host " 輸出路徑 : $OutputPath"
     Write-Host ""
 
-    if ($BranchType -eq "1-3_UAT") {
+    if ($BranchType -like '*_UAT') {
         # UAT：直接全 build，選 BUILD_MODE
         Write-Host " UAT 模式：全 build"
         $BuildMode = Select-BuildMode -Current $BuildMode
@@ -580,10 +580,11 @@ if ($skipBuild) {
     if ($step7Choice -ieq "S") {
         Write-Host " ⏭️  略過整理"
     } else {
-        # 建立時間戳資料夾：build-output/<Branch>/yyyyMMddHHmm/
+        # 建立時間戳資料夾：build-output/<Branch>/yyyyMMddHHmm[-all]/
         $timestamp      = Get-Date -Format "yyyyMMddHHmm"
+        $folderName     = if (-not $BuildModules -and $BranchType -notlike '*_UAT') { "${timestamp}-all" } else { $timestamp }
         $BuildOutputDir = Join-Path (Split-Path $OutputPath -Parent) "build-output"
-        $DeployPath     = Join-Path $BuildOutputDir $GitBranch $timestamp
+        $DeployPath     = Join-Path $BuildOutputDir $GitBranch $folderName
         $FepAppPath     = Join-Path $DeployPath "fep-app"
         New-Item -ItemType Directory -Path $FepAppPath -Force | Out-Null
         Write-Host " 目的資料夾：$DeployPath"
@@ -604,53 +605,59 @@ if ($skipBuild) {
         }
         Write-Host ""
 
-        if ($Services.Count -gt 0) {
-            # 依服務清單整理
-            foreach ($service in $Services) {
-                if ($service -eq "fep-web") {
-                    # WAR：複製到 fep-app/
-                    $warFile = Get-ChildItem $OutputPath -Filter "fep-web.war" -ErrorAction SilentlyContinue | Select-Object -First 1
-                    if ($warFile) {
-                        Copy-Item $warFile.FullName $FepAppPath -Force
-                        Write-Host " [war]  複製：$($warFile.Name) → fep-app/"
-                    } else {
-                        Write-Host " ⚠️  找不到 fep-web.war" -ForegroundColor Yellow
-                    }
-                } elseif ($service -eq "fep-batch-task") {
-                    # fep-batch-task：無 tar.gz，僅複製 I 欄 fep-batch-task- 開頭的 jar 到 fep-app/
-                    foreach ($jar in ($BatchJars | Where-Object { $_ -like 'fep-batch-task-*' })) {
-                        $jarFile = Get-ChildItem $OutputPath -Filter $jar -ErrorAction SilentlyContinue | Select-Object -First 1
-                        if ($jarFile) {
-                            Copy-Item $jarFile.FullName $FepAppPath -Force
-                            Write-Host " [jar]  複製：$($jarFile.Name) → fep-app/"
+        if ($BuildModules) {
+            # 部分 build：依 H 欄服務清單整理
+            if ($Services.Count -gt 0) {
+                foreach ($service in $Services) {
+                    if ($service -eq "fep-web") {
+                        # WAR：複製到 fep-app/
+                        $warFile = Get-ChildItem $OutputPath -Filter "fep-web.war" -ErrorAction SilentlyContinue | Select-Object -First 1
+                        if ($warFile) {
+                            Copy-Item $warFile.FullName $FepAppPath -Force
+                            Write-Host " [war]  複製：$($warFile.Name) → fep-app/"
                         } else {
-                            Write-Host " ⚠️  找不到 jar：$jar" -ForegroundColor Yellow
+                            Write-Host " ⚠️  找不到 fep-web.war" -ForegroundColor Yellow
                         }
-                    }
-                } else {
-                    # 一般服務：解壓 bin tar.gz
-                    # Pattern 1: {service}-bin*.tar.gz（如 fep-batch-cmdline → fep-batch-cmdline-bin.tar.gz）
-                    $tarFiles = Get-ChildItem $OutputPath -Filter "$service-bin*.tar.gz" -ErrorAction SilentlyContinue | Sort-Object Name
-                    if (-not $tarFiles) {
-                        # Pattern 2: {base}-bin-{suffix}*.tar.gz（如 fep-server-atm → fep-server-bin-atm.tar.gz）
-                        $lastDash = $service.LastIndexOf('-')
-                        if ($lastDash -gt 0) {
-                            $altFilter = "$($service.Substring(0, $lastDash))-bin-$($service.Substring($lastDash + 1))*.tar.gz"
-                            $tarFiles = Get-ChildItem $OutputPath -Filter $altFilter -ErrorAction SilentlyContinue | Sort-Object Name
-                        }
-                    }
-                    if ($tarFiles) {
-                        foreach ($tar in $tarFiles) {
-                            Write-Host " [tar]  解壓縮：$($tar.Name)"
-                            tar -xzf $tar.FullName -C $DeployPath
+                    } elseif ($service -eq "fep-batch-task") {
+                        # fep-batch-task：無 tar.gz，僅複製 I 欄 fep-batch-task- 開頭的 jar 到 fep-app/
+                        foreach ($jar in ($BatchJars | Where-Object { $_ -like 'fep-batch-task-*' })) {
+                            $jarFile = Get-ChildItem $OutputPath -Filter $jar -ErrorAction SilentlyContinue | Select-Object -First 1
+                            if ($jarFile) {
+                                Copy-Item $jarFile.FullName $FepAppPath -Force
+                                Write-Host " [jar]  複製：$($jarFile.Name) → fep-app/"
+                            } else {
+                                Write-Host " ⚠️  找不到 jar：$jar" -ForegroundColor Yellow
+                            }
                         }
                     } else {
-                        Write-Host " ⚠️  找不到 $service 的 bin tar.gz" -ForegroundColor Yellow
+                        # 一般服務：解壓 bin tar.gz
+                        # Pattern 1: {service}-bin*.tar.gz（如 fep-batch-cmdline → fep-batch-cmdline-bin.tar.gz）
+                        $tarFiles = Get-ChildItem $OutputPath -Filter "$service-bin*.tar.gz" -ErrorAction SilentlyContinue | Sort-Object Name
+                        if (-not $tarFiles) {
+                            # Pattern 2: {base}-bin-{suffix}*.tar.gz（如 fep-server-atm → fep-server-bin-atm.tar.gz）
+                            $lastDash = $service.LastIndexOf('-')
+                            if ($lastDash -gt 0) {
+                                $altFilter = "$($service.Substring(0, $lastDash))-bin-$($service.Substring($lastDash + 1))*.tar.gz"
+                                $tarFiles = Get-ChildItem $OutputPath -Filter $altFilter -ErrorAction SilentlyContinue | Sort-Object Name
+                            }
+                        }
+                        if ($tarFiles) {
+                            foreach ($tar in $tarFiles) {
+                                Write-Host " [tar]  解壓縮：$($tar.Name)"
+                                tar -xzf $tar.FullName -C $DeployPath
+                            }
+                        } else {
+                            Write-Host " ⚠️  找不到 $service 的 bin tar.gz" -ForegroundColor Yellow
+                        }
                     }
                 }
+            } else {
+                Write-Host " ⚠️  BuildModuleData.json 無服務清單，將解壓全部 bin tar.gz" -ForegroundColor Yellow
+                Get-ChildItem $OutputPath -Filter "*-bin*.tar.gz" -ErrorAction SilentlyContinue | Sort-Object Name |
+                    ForEach-Object { Write-Host " [tar]  解壓縮：$($_.Name)"; tar -xzf $_.FullName -C $DeployPath }
             }
         } else {
-            # 無模組清單（UAT 或 skip step3）：解壓全部 bin tar.gz
+            # 全 build / UAT：解壓全部 tar.gz + 複製 war + 複製所有 jar
             $allTars = Get-ChildItem $OutputPath -Filter "*-bin*.tar.gz" -ErrorAction SilentlyContinue | Sort-Object Name
             if ($allTars) {
                 foreach ($tar in $allTars) {
@@ -660,6 +667,18 @@ if ($skipBuild) {
             } else {
                 Write-Host " ⚠️  OutputPath 中找不到任何 bin tar.gz" -ForegroundColor Yellow
             }
+
+            $warFile = Get-ChildItem $OutputPath -Filter "fep-web.war" -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($warFile) {
+                Copy-Item $warFile.FullName $FepAppPath -Force
+                Write-Host " [war]  複製：$($warFile.Name) → fep-app/"
+            }
+
+            Get-ChildItem $OutputPath -Filter "*.jar" -ErrorAction SilentlyContinue |
+                ForEach-Object {
+                    Copy-Item $_.FullName $FepAppPath -Force
+                    Write-Host " [jar]  複製：$($_.Name) → fep-app/"
+                }
         }
 
         # 清除 macOS 產生的 ._ resource fork 檔案
