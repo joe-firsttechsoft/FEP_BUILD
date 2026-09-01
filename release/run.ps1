@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("1-3_SIT", "1-3_UAT", "2-1_SIT")]
+    [ValidateSet("1-3_SIT", "1-3_UAT", "2-1_SIT", "2-2_SIT")]
     [string]$BranchType
 )
 
@@ -10,12 +10,14 @@ if (-not $BranchType) {
     Write-Host " [1] FEP_1-3_SIT"
     Write-Host " [2] FEP_1-3_UAT"
     Write-Host " [3] FEP_2-1_SIT"
-    $branchInput = Read-Host " 請輸入 [1/2/3]（預設 1）"
+    Write-Host " [4] FEP_2-2_SIT"
+    $branchInput = Read-Host " 請輸入 [1/2/3/4]（預設 1）"
     $BranchType = switch ($branchInput.Trim()) {
         "1"  { "1-3_SIT" }
         ""   { "1-3_SIT" }
         "2"  { "1-3_UAT" }
         "3"  { "2-1_SIT" }
+        "4"  { "2-2_SIT" }
         default { Write-Host " ❌ 無效選項：$branchInput" -ForegroundColor Red; exit 1 }
     }
 }
@@ -67,6 +69,7 @@ $GitBranch = switch ($BranchType) {
     "1-3_SIT" { "FEP_1-3_SIT" }
     "1-3_UAT" { "FEP_1-3_UAT" }
     "2-1_SIT" { "FEP_2-1" }
+    "2-2_SIT" { "FEP_2-2" }
 }
 
 # 依平台選擇對應的 .env（路徑格式不同，Windows/macOS 分開維護）
@@ -713,6 +716,7 @@ $ConfigFolder = switch ($BranchType) {
     "1-3_SIT" { Join-Path $RepoPath "source" "SIT套config" }
     "1-3_UAT" { Join-Path $RepoPath "source" "UAT套config" }
     "2-1_SIT" { Join-Path $RepoPath "source" "SIT套config" }  # TODO: 確認 2-1 是否有獨立 config 資料夾
+    "2-2_SIT" { Join-Path $RepoPath "source" "SIT套config" }  # TODO: 確認 2-2 是否有獨立 config 資料夾
 }
 
 Write-Host ""

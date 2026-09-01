@@ -80,6 +80,7 @@ cd release
 .\run.ps1 -BranchType 1-3_SIT   # FEP_1-3_SIT
 .\run.ps1 -BranchType 1-3_UAT   # FEP_1-3_UAT
 .\run.ps1 -BranchType 2-1_SIT   # FEP_2-1
+.\run.ps1 -BranchType 2-2_SIT   # FEP_2-2
 ```
 
 ---
@@ -156,6 +157,7 @@ UAT 模式固定全 build，手動選擇 `BUILD_MODE`。
 | `1-3_SIT` | `FEP_1-3_SIT` | SIT 過版 |
 | `1-3_UAT` | `FEP_1-3_UAT` | UAT 過版 |
 | `2-1_SIT` | `FEP_2-1` | SIT 過版（2-1 版本）|
+| `2-2_SIT` | `FEP_2-2` | SIT 過版（2-2 版本）|
 
 ---
 

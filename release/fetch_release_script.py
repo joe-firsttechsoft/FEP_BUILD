@@ -80,6 +80,7 @@ SHEET_NAME = "SIT UAT待過版"
 BRANCH_KEYWORD = {
     "1-3_SIT": ["P1-2 SIT", "P1-3 SIT"],
     "2-1_SIT": ["P2-1 SIT"],
+    "2-2_SIT": ["P2-2 SIT"],
 }
 COL_V = 21  # V 欄（0-indexed）
 COL_H = 7   # H 欄（0-indexed）— 服務/模組名稱
@@ -94,6 +95,9 @@ BRANCH_MODULE_RANGES = {
     ],
     "2-1_SIT": [
         ("P2-1 SIT", "P2-1 UAT"),
+    ],
+    "2-2_SIT": [
+        ("P2-2 SIT", "P2-2 UAT"),
     ],
 }
 
@@ -180,8 +184,8 @@ def read_script(file_bytes, branch_type):
     return "\n".join(scripts)
 
 def main():
-    if len(sys.argv) < 2 or sys.argv[1] not in ("1-3_SIT", "2-1_SIT"):
-        print("用法：python3 fetch_release_script.py 1-3_SIT|2-1_SIT")
+    if len(sys.argv) < 2 or sys.argv[1] not in ("1-3_SIT", "2-1_SIT", "2-2_SIT"):
+        print("用法：python3 fetch_release_script.py 1-3_SIT|2-1_SIT|2-2_SIT")
         sys.exit(1)
 
     branch_type = sys.argv[1]
